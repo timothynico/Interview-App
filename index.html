@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Interview HRD - Latihan Wawancara</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <script src="https://cdn.webrtc-experiment.com/RecordRTC.js"></script>
+  </head>
+  <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+      <!-- Header -->
+      <div class="bg-white rounded-2xl shadow-xl p-8 mb-6">
+        <h1 class="text-4xl font-bold text-gray-800 mb-2">
+          <i class="fas fa-briefcase text-indigo-600 mr-3"></i>
+          Interview HRD PT. XYZ
+        </h1>
+        <p class="text-gray-600">
+          Lengkapi data diri dan jawab pertanyaan wawancara
+        </p>
+      </div>
+
+      <!-- Registration Form -->
+      <div id="registration-form" class="bg-white rounded-2xl shadow-xl p-8 mb-6">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6">
+          <i class="fas fa-user-circle text-indigo-600 mr-2"></i>
+          Data Kandidat
+        </h2>
+        
+        <form id="candidate-form" class="space-y-5">
+          <!-- Nama -->
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">
+              Nama Lengkap <span class="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              id="candidate-name"
+              required
+              class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none transition"
+              placeholder="Masukkan nama lengkap Anda"
+            />
+          </div>
+
+          <!-- Email -->
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">
+              Email <span class="text-red-500">*</span>
+            </label>
+            <input
+              type="email"
+              id="candidate-email"
+              required
+              class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none transition"
+              placeholder="contoh@email.com"
+            />
+          </div>
+
+          <!-- Posisi -->
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">
+              Posisi yang Dilamar <span class="text-red-500">*</span>
+            </label>
+            <select
+              id="candidate-position"
+              required
+              class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none transition"
+            >
+              <option value="">-- Pilih Posisi --</option>
+              <option value="Software Engineer">Software Engineer</option>
+              <option value="Frontend Developer">Frontend Developer</option>
+              <option value="Backend Developer">Backend Developer</option>
+              <option value="Full Stack Developer">Full Stack Developer</option>
+              <option value="Data Scientist">Data Scientist</option>
+              <option value="UI/UX Designer">UI/UX Designer</option>
+              <option value="Product Manager">Product Manager</option>
+              <option value="Project Manager">Project Manager</option>
+              <option value="HR Specialist">HR Specialist</option>
+              <option value="Marketing Specialist">Marketing Specialist</option>
+              <option value="Sales Executive">Sales Executive</option>
+              <option value="Customer Service">Customer Service</option>
+            </select>
+          </div>
+
+          <!-- CV Upload -->
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">
+              Upload CV (PDF) <span class="text-red-500">*</span>
+            </label>
+            <div class="relative">
+              <input
+                type="file"
+                id="candidate-cv"
+                accept=".pdf"
+                required
+                class="hidden"
+              />
+              <label
+                for="candidate-cv"
+                class="flex items-center justify-center w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-indigo-500 transition"
+              >
+                <div class="text-center">
+                  <i class="fas fa-cloud-upload-alt text-3xl text-gray-400 mb-2"></i>
+                  <p class="text-sm text-gray-600">
+                    <span class="text-indigo-600 font-semibold">Klik untuk upload</span> atau drag & drop
+                  </p>
+                  <p class="text-xs text-gray-500 mt-1">PDF (Max 5MB)</p>
+                </div>
+              </label>
+            </div>
+            <p id="cv-filename" class="text-sm text-green-600 mt-2 hidden"></p>
+          </div>
+
+          <!-- Submit Button -->
+          <button
+            type="submit"
+            class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg transform transition hover:scale-105"
+          >
+            <i class="fas fa-arrow-right mr-2"></i>
+            Mulai Interview
+          </button>
+        </form>
+      </div>
+
+      <!-- Interview Section (Hidden initially) -->
+      <div id="interview-section" class="hidden">
+        <!-- Progress Bar -->
+        <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
+          <div class="flex justify-between items-center mb-3">
+            <span class="text-sm font-semibold text-gray-700">Progres</span>
+            <span class="text-sm font-semibold text-indigo-600" id="progress-text">
+              Pertanyaan 1 dari 4
+            </span>
+          </div>
+          <div class="w-full bg-gray-200 rounded-full h-3">
+            <div
+              id="progress-bar"
+              class="bg-gradient-to-r from-indigo-500 to-purple-600 h-3 rounded-full transition-all duration-500"
+              style="width: 25%"
+            ></div>
+          </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
+          <!-- Video Section -->
+          <div class="bg-gradient-to-r from-indigo-600 to-purple-600 p-6">
+            <h2 class="text-2xl font-bold text-white mb-4" id="question-title">
+              Pertanyaan 1
+            </h2>
+            <div class="relative bg-black rounded-xl overflow-hidden shadow-2xl">
+              <video id="question-video" class="w-full" controls>
+                <source src="" type="video/mp4" />
+                Browser Anda tidak mendukung video.
+              </video>
+            </div>
+          </div>
+
+          <!-- Recording Section -->
+          <div class="p-8">
+            <div id="recording-section" class="hidden">
+              <h3 class="text-xl font-semibold text-gray-800 mb-4">
+                <i class="fas fa-microphone text-red-500 mr-2"></i>
+                Rekam Jawaban Anda
+              </h3>
+
+              <!-- Recording Controls -->
+              <div class="flex flex-col items-center gap-4 mb-6">
+                <button
+                  id="record-btn"
+                  class="bg-red-500 hover:bg-red-600 text-white font-bold py-4 px-8 rounded-full shadow-lg transform transition hover:scale-105 flex items-center gap-3"
+                >
+                  <i class="fas fa-microphone text-2xl"></i>
+                  <span>Mulai Merekam</span>
+                </button>
+
+                <div id="recording-status" class="hidden">
+                  <div class="flex items-center gap-3 text-red-600 font-semibold">
+                    <div class="w-4 h-4 bg-red-600 rounded-full animate-pulse"></div>
+                    <span>Sedang Merekam...</span>
+                    <span id="record-timer">00:00</span>
+                  </div>
+                </div>
+
+                <button
+                  id="stop-btn"
+                  class="hidden bg-gray-700 hover:bg-gray-800 text-white font-bold py-3 px-6 rounded-full shadow-lg transform transition hover:scale-105"
+                >
+                  <i class="fas fa-stop mr-2"></i>
+                  Stop Rekaman
+                </button>
+              </div>
+
+              <!-- Audio Preview -->
+              <div id="audio-preview" class="hidden mb-6">
+                <p class="text-sm text-gray-600 mb-2">Preview Audio:</p>
+                <audio id="preview-audio" controls class="w-full"></audio>
+              </div>
+
+              <!-- Transcript -->
+              <div id="transcript-section" class="hidden mb-6">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                  Transkripsi:
+                </label>
+                <div class="bg-gray-50 border-2 border-gray-200 rounded-lg p-4">
+                  <p id="transcript-text" class="text-gray-800"></p>
+                </div>
+              </div>
+
+              <!-- Submit Button -->
+              <button
+                id="submit-btn"
+                class="hidden w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg transform transition hover:scale-105"
+              >
+                <i class="fas fa-paper-plane mr-2"></i>
+                Submit & Lanjut
+              </button>
+
+              <!-- Loading -->
+              <div id="loading" class="hidden text-center py-4">
+                <i class="fas fa-spinner fa-spin text-4xl text-indigo-600"></i>
+                <p class="text-gray-600 mt-2">Memproses audio...</p>
+              </div>
+            </div>
+
+            <!-- Video Instructions -->
+            <div id="video-instruction" class="text-center py-8">
+              <i class="fas fa-play-circle text-6xl text-indigo-600 mb-4"></i>
+              <p class="text-gray-600 text-lg">
+                Tonton video pertanyaan terlebih dahulu
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Completion Screen -->
+      <div
+        id="completion-screen"
+        class="hidden bg-white rounded-2xl shadow-xl p-8 text-center"
+      >
+        <i class="fas fa-check-circle text-7xl text-green-500 mb-4"></i>
+        <h2 class="text-3xl font-bold text-gray-800 mb-2">Selamat! 🎉</h2>
+        <p class="text-gray-600 text-lg mb-6">
+          Anda telah menyelesaikan semua wawancara HRD. Nantikan kabar berikutnya.
+        </p>
+      </div>
+    </div>
+
+    <script>
+      // Konfigurasi Video
+      const questions = [
+        {
+          title: "Pertanyaan 1: Perkenalkan Diri Anda",
+          videoUrl: "/videos/q1.mp4",
+        },
+        {
+          title: "Pertanyaan 2: Ceritakan Pengalaman Kerja",
+          videoUrl: "/videos/q2.mp4",
+        },
+        {
+          title: "Pertanyaan 3: Apa Kelebihan dan Kekurangan Anda",
+          videoUrl: "/videos/q3.mp4",
+        },
+        {
+          title: "Pertanyaan 4: Mengapa Memilih Perusahaan Kami",
+          videoUrl: "/videos/q4.mp4",
+        },
+      ];
+
+      let currentQuestion = 0;
+      let recorder;
+      let recordedBlob;
+      let recordingStartTime;
+      let timerInterval;
+      let candidateData = {};
+
+      // Generate unique session ID
+      const sessionId =
+        "session_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+
+      // Elements
+      const registrationForm = document.getElementById("registration-form");
+      const interviewSection = document.getElementById("interview-section");
+      const candidateForm = document.getElementById("candidate-form");
+      const cvInput = document.getElementById("candidate-cv");
+      const cvFilename = document.getElementById("cv-filename");
+      
+      const video = document.getElementById("question-video");
+      const recordBtn = document.getElementById("record-btn");
+      const stopBtn = document.getElementById("stop-btn");
+      const submitBtn = document.getElementById("submit-btn");
+      const recordingStatus = document.getElementById("recording-status");
+      const audioPreview = document.getElementById("audio-preview");
+      const previewAudio = document.getElementById("preview-audio");
+      const transcriptSection = document.getElementById("transcript-section");
+      const transcriptText = document.getElementById("transcript-text");
+      const loading = document.getElementById("loading");
+      const recordingSection = document.getElementById("recording-section");
+      const videoInstruction = document.getElementById("video-instruction");
+      const completionScreen = document.getElementById("completion-screen");
+
+      // CV Upload Handler
+      cvInput.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          if (file.size > 5 * 1024 * 1024) {
+            alert("Ukuran file maksimal 5MB");
+            cvInput.value = "";
+            cvFilename.classList.add("hidden");
+            return;
+          }
+          cvFilename.textContent = `✓ ${file.name}`;
+          cvFilename.classList.remove("hidden");
+        }
+      });
+
+      // Form Submission
+      candidateForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        
+        candidateData = {
+          name: document.getElementById("candidate-name").value,
+          email: document.getElementById("candidate-email").value,
+          position: document.getElementById("candidate-position").value,
+          cv_file: cvInput.files[0]
+        };
+
+        // Upload CV first
+        const formData = new FormData();
+        formData.append("cv", candidateData.cv_file);
+        formData.append("session_id", sessionId);
+        formData.append("name", candidateData.name);
+        formData.append("email", candidateData.email);
+        formData.append("position", candidateData.position);
+
+        try {
+          const response = await fetch("http://127.0.0.1:5000/upload-cv", {
+            method: "POST",
+            body: formData,
+          });
+
+          const result = await response.json();
+          
+          if (result.success) {
+            candidateData.cv_filename = result.cv_filename;
+            
+            // Hide form, show interview
+            registrationForm.classList.add("hidden");
+            interviewSection.classList.remove("hidden");
+            loadQuestion();
+          } else {
+            alert("Error upload CV: " + result.error);
+          }
+        } catch (err) {
+          alert("Error: " + err.message);
+        }
+      });
+
+      // Load question
+      function loadQuestion() {
+        if (currentQuestion >= questions.length) {
+          showCompletion();
+          return;
+        }
+
+        const q = questions[currentQuestion];
+        document.getElementById("question-title").textContent = q.title;
+        video.src = q.videoUrl;
+
+        // Update progress
+        const progress = ((currentQuestion + 1) / questions.length) * 100;
+        document.getElementById("progress-bar").style.width = progress + "%";
+        document.getElementById("progress-text").textContent = `Pertanyaan ${
+          currentQuestion + 1
+        } dari ${questions.length}`;
+
+        // Reset UI
+        recordingSection.classList.add("hidden");
+        videoInstruction.classList.remove("hidden");
+        audioPreview.classList.add("hidden");
+        transcriptSection.classList.add("hidden");
+        submitBtn.classList.add("hidden");
+        recordBtn.classList.remove("hidden");
+        stopBtn.classList.add("hidden");
+        recordingStatus.classList.add("hidden");
+      }
+
+      // Video ended handler
+      video.addEventListener("ended", () => {
+        videoInstruction.classList.add("hidden");
+        recordingSection.classList.remove("hidden");
+      });
+
+      // Start recording dengan RecordRTC (WAV format)
+      recordBtn.addEventListener("click", async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              sampleRate: 16000,
+              channelCount: 1,
+              echoCancellation: true,
+              noiseSuppression: true
+            }
+          });
+          
+          recorder = RecordRTC(stream, {
+            type: 'audio',
+            mimeType: 'audio/wav',
+            recorderType: RecordRTC.StereoAudioRecorder,
+            numberOfAudioChannels: 1,
+            desiredSampRate: 16000
+          });
+
+          recorder.startRecording();
+          recordBtn.classList.add("hidden");
+          stopBtn.classList.remove("hidden");
+          recordingStatus.classList.remove("hidden");
+
+          recordingStartTime = Date.now();
+          timerInterval = setInterval(updateTimer, 1000);
+        } catch (err) {
+          alert("Error mengakses microphone: " + err.message);
+        }
+      });
+
+      // Stop recording
+      stopBtn.addEventListener("click", () => {
+        recorder.stopRecording(function() {
+          recordedBlob = recorder.getBlob();
+          previewAudio.src = URL.createObjectURL(recordedBlob);
+          audioPreview.classList.remove("hidden");
+          submitBtn.classList.remove("hidden");
+          
+          recorder.stream.getTracks().forEach(track => track.stop());
+        });
+        
+        stopBtn.classList.add("hidden");
+        recordBtn.classList.remove("hidden");
+        recordingStatus.classList.add("hidden");
+        clearInterval(timerInterval);
+      });
+
+      // Update timer
+      function updateTimer() {
+        const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+        const mins = Math.floor(elapsed / 60).toString().padStart(2, "0");
+        const secs = (elapsed % 60).toString().padStart(2, "0");
+        document.getElementById("record-timer").textContent = `${mins}:${secs}`;
+      }
+
+      // Submit answer
+      submitBtn.addEventListener("click", async () => {
+        loading.classList.remove("hidden");
+        submitBtn.classList.add("hidden");
+
+        const formData = new FormData();
+        formData.append("audio", recordedBlob, "recording.wav");
+        formData.append("question_number", currentQuestion + 1);
+        formData.append("session_id", sessionId);
+
+        try {
+          const response = await fetch("http://127.0.0.1:5000/transcribe", {
+            method: "POST",
+            body: formData,
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            transcriptText.textContent = result.transcript;
+            transcriptSection.classList.remove("hidden");
+
+            if (result.is_last_question && result.webhook_status === "success") {
+              const successMsg = document.createElement("div");
+              successMsg.className =
+                "bg-green-100 border-2 border-green-500 text-green-700 px-4 py-3 rounded-lg mt-4";
+              successMsg.innerHTML =
+                '<i class="fas fa-check-circle mr-2"></i><strong>Berhasil!</strong> Semua data telah dikirim ke webhook.';
+              transcriptSection.appendChild(successMsg);
+            }
+
+            setTimeout(() => {
+              currentQuestion++;
+              loadQuestion();
+            }, 2000);
+          } else {
+            alert("Error: " + result.error);
+            submitBtn.classList.remove("hidden");
+          }
+        } catch (err) {
+          alert("Error mengirim data: " + err.message);
+          submitBtn.classList.remove("hidden");
+        } finally {
+          loading.classList.add("hidden");
+        }
+      });
+
+      // Show completion
+      function showCompletion() {
+        interviewSection.classList.add("hidden");
+        completionScreen.classList.remove("hidden");
+      }
+
+      // Reset session and reload
+      async function resetAndReload() {
+        try {
+          await fetch("http://127.0.0.1:5000/reset-session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: sessionId }),
+          });
+        } catch (err) {
+          console.error("Error resetting session:", err);
+        }
+        location.reload();
+      }
+    </script>
+  </body>
+</html>
