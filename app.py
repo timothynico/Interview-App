@@ -173,11 +173,10 @@ def get_candidate_detail(session_id):
         }), 500
 
 
-N8N_CHAT_WEBHOOK = "https://n8n-1.saturn.petra.ac.id/webhook/YOUR_CHAT_WEBHOOK_ID"  # Ganti dengan webhook n8n Anda
+N8N_CHAT_WEBHOOK = "https://n8n-1.saturn.petra.ac.id/webhook-test/d14704c6-0264-43d4-a978-e17cccf06e45"  # Ganti dengan webhook n8n Anda
 
 @app.route('/api/chat', methods=['POST'])
 def chat_with_ai():
-    """API untuk chat dengan AI - kirim ke n8n untuk RAG processing"""
     try:
         data = request.get_json()
         session_id = data.get('session_id')
@@ -189,48 +188,49 @@ def chat_with_ai():
                 'error': 'session_id dan message required'
             }), 400
         
-        # Kirim request ke n8n webhook untuk RAG processing
         payload = {
-            'user_id': session_id,  # session_id sebagai user_id
+            'user_id': session_id, 
             'message': message,
             'timestamp': datetime.now().isoformat()
         }
         
-        # POST ke n8n
         response = requests.post(
             N8N_CHAT_WEBHOOK,
             json=payload,
             headers={'Content-Type': 'application/json'},
-            timeout=30  # 30 detik timeout untuk RAG processing
+            timeout=30
         )
         
-        if response.status_code == 200:
-            response_data = response.json()
-            # n8n mengembalikan response AI
-            ai_response = response_data.get('response', 'Maaf, tidak ada respons dari AI.')
-            
-            return jsonify({
-                'success': True,
-                'response': ai_response
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': f'n8n error: {response.status_code}'
-            }), 500
+        response.raise_for_status()
+        response_data = response.json()
+        
+        ai_message = response_data.get('output', '')
+        
+        if isinstance(ai_message, dict):
+            ai_message = json.dumps(ai_message, ensure_ascii=False)
+        
+        return jsonify({
+            'success': True,
+            'response': ai_message
+        })
             
     except requests.Timeout:
         return jsonify({
             'success': False,
             'error': 'Request timeout - AI membutuhkan waktu terlalu lama'
         }), 504
+    except requests.RequestException as e:
+        print(f"Error calling n8n: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Error connecting to AI: {str(e)}'
+        }), 500
     except Exception as e:
         print(f"Error chat with AI: {str(e)}")
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
-
 
 @app.route('/upload-cv', methods=['POST'])
 def upload_cv():

@@ -455,6 +455,7 @@
     <script>
         const API_BASE_URL = 'http://127.0.0.1:5000';
         let currentSessionId = null;
+        let cur_user_id = null;
         let allCandidates = [];
         
         // Pertanyaan interview
@@ -506,7 +507,7 @@
                                 <button class="btn btn-answers" onclick="showAnswers('${candidate.session_id}')">
                                     💬 Jawaban
                                 </button>
-                                <button class="btn btn-chat" onclick="showChat('${candidate.session_id}')">
+                                <button class="btn btn-chat" onclick="showChat('${candidate.session_id}', '${candidate.id}')">
                                     🤖 Chat AI
                                 </button>
                             </div>
@@ -583,8 +584,10 @@
         }
         
         // Fungsi untuk menampilkan chat
-        function showChat(sessionId) {
+        function showChat(sessionId, user_id) {
             currentSessionId = sessionId;
+            cur_user_id = user_id 
+
             const candidate = allCandidates.find(c => c.session_id === sessionId);
             if (!candidate) return;
             
@@ -632,6 +635,7 @@
             `;
             chatMessages.scrollTop = chatMessages.scrollHeight;
             
+
             try {
                 // Kirim ke API backend yang akan forward ke n8n untuk RAG processing
                 const response = await fetch(`${API_BASE_URL}/api/chat`, {
@@ -640,11 +644,13 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        session_id: currentSessionId,  // Ini akan jadi user_id di n8n
+                        session_id: cur_user_id,  // Ini akan jadi user_id di n8n
                         message: message
                     })
                 });
                 
+                console.log(response);
+
                 const data = await response.json();
                 
                 // Hapus typing indicator
