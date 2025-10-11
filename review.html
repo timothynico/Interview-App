@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Review Kandidat - Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .table-container {
+            padding: 30px;
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+        
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.9em;
+            letter-spacing: 0.5px;
+        }
+        
+        td {
+            padding: 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        tbody tr {
+            transition: background-color 0.3s;
+        }
+        
+        tbody tr:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: 500;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .btn-cv {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .btn-cv:hover {
+            background: #45a049;
+        }
+        
+        .btn-answers {
+            background: #2196F3;
+            color: white;
+        }
+        
+        .btn-answers:hover {
+            background: #0b7dda;
+        }
+        
+        .btn-chat {
+            background: #FF9800;
+            color: white;
+        }
+        
+        .btn-chat:hover {
+            background: #e68900;
+        }
+        
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.6);
+            animation: fadeIn 0.3s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 0;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow: hidden;
+            animation: slideDown 0.3s;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        
+        @keyframes slideDown {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.5em;
+        }
+        
+        .close {
+            color: white;
+            font-size: 35px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+            transition: transform 0.3s;
+        }
+        
+        .close:hover {
+            transform: rotate(90deg);
+        }
+        
+        .modal-body {
+            padding: 30px;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        
+        .cv-text {
+            white-space: pre-wrap;
+            line-height: 1.8;
+            color: #333;
+            font-size: 0.95em;
+        }
+        
+        .answer-item {
+            background: #f8f9fa;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .answer-item h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+        
+        .answer-item p {
+            color: #555;
+            line-height: 1.6;
+        }
+        
+        /* Chat Styles */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 60vh;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        
+        .message.user {
+            flex-direction: row-reverse;
+        }
+        
+        .message-content {
+            max-width: 70%;
+            padding: 12px 18px;
+            border-radius: 15px;
+            line-height: 1.5;
+        }
+        
+        .message.ai .message-content {
+            background: #667eea;
+            color: white;
+            border-bottom-left-radius: 5px;
+        }
+        
+        .message.user .message-content {
+            background: #e0e0e0;
+            color: #333;
+            border-bottom-right-radius: 5px;
+        }
+        
+        .chat-input-container {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .chat-input {
+            flex: 1;
+            padding: 12px 18px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 1em;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        
+        .chat-input:focus {
+            border-color: #667eea;
+        }
+        
+        .btn-send {
+            padding: 12px 30px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .btn-send:hover {
+            background: #5568d3;
+            transform: scale(1.05);
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        
+        .status-complete {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+        
+        .empty-state svg {
+            width: 100px;
+            height: 100px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+            font-size: 1.2em;
+        }
+        
+        @media (max-width: 768px) {
+            .actions {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+            
+            .modal-content {
+                width: 95%;
+                margin: 10% auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📋 Review Kandidat</h1>
+            <p>Dashboard untuk mengelola dan meninjau semua kandidat</p>
+        </div>
+        
+        <div class="table-container">
+            <table id="candidateTable">
+                <thead>
+                    <tr>
+                        <th>Nama</th>
+                        <th>Email</th>
+                        <th>Posisi</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="candidateBody">
+                    <tr>
+                        <td colspan="4">
+                            <div class="loading">Loading data...</div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Modal Review CV -->
+    <div id="cvModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📄 Review CV</h2>
+                <span class="close" onclick="closeModal('cvModal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <h3 id="cvCandidateName" style="margin-bottom: 20px; color: #667eea;"></h3>
+                <div id="cvContent" class="cv-text"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Review Jawaban -->
+    <div id="answersModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>💬 Review Jawaban Interview</h2>
+                <span class="close" onclick="closeModal('answersModal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <h3 id="answersCandidateName" style="margin-bottom: 20px; color: #667eea;"></h3>
+                <div id="answersContent"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Chat AI -->
+    <div id="chatModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🤖 Chat dengan AI</h2>
+                <span class="close" onclick="closeModal('chatModal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <h3 id="chatCandidateName" style="margin-bottom: 20px; color: #667eea;"></h3>
+                <div class="chat-container">
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="message ai">
+                            <div class="message-content">
+                                Halo! Saya AI assistant. Saya siap membantu Anda menganalisis kandidat ini. Apa yang ingin Anda ketahui?
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chat-input-container">
+                        <input type="text" class="chat-input" id="chatInput" placeholder="Ketik pertanyaan Anda...">
+                        <button class="btn-send" onclick="sendMessage()">Kirim</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE_URL = 'http://127.0.0.1:5000';
+        let currentSessionId = null;
+        let allCandidates = [];
+        
+        // Pertanyaan interview
+        const questions = [
+            "Halo, perkenalkan saya Lesti, AI HRD dari PT XYZ. Silakan memperkenalkan diri Anda.",
+            "Baik, pertanyaan selanjutnya, Kenapa Anda tertarik melamar di perusahaan kami?",
+            "Ceritakan pengalaman Anda yang relevan dengan posisi yang Anda lamar",
+            "Pertanyaan terakhir, mengapa kami harus menerima anda untuk bergabung di perusahaan kami?"
+        ];
+        
+        // Load kandidat dari API
+        async function loadCandidates() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/candidates`);
+                const data = await response.json();
+                
+                if (data.success && data.candidates) {
+                    allCandidates = data.candidates;
+                    renderCandidates(allCandidates);
+                } else {
+                    showEmptyState();
+                }
+            } catch (error) {
+                console.error('Error loading candidates:', error);
+                showErrorState();
+            }
+        }
+        
+        // Render kandidat ke tabel
+        function renderCandidates(candidates) {
+            const tbody = document.getElementById('candidateBody');
+            
+            if (candidates.length === 0) {
+                showEmptyState();
+                return;
+            }
+            
+            tbody.innerHTML = candidates.map((candidate) => {
+                return `
+                    <tr>
+                        <td><strong>${candidate.nama}</strong></td>
+                        <td>${candidate.email}</td>
+                        <td>${candidate.posisi_dilamar}</td>
+                        <td>
+                            <div class="actions">
+                                <button class="btn btn-cv" onclick="showCV('${candidate.session_id}')">
+                                    📄 CV
+                                </button>
+                                <button class="btn btn-answers" onclick="showAnswers('${candidate.session_id}')">
+                                    💬 Jawaban
+                                </button>
+                                <button class="btn btn-chat" onclick="showChat('${candidate.session_id}')">
+                                    🤖 Chat AI
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        // Tampilkan empty state
+        function showEmptyState() {
+            const tbody = document.getElementById('candidateBody');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="4">
+                        <div class="empty-state">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+                            </svg>
+                            <h3>Belum ada kandidat</h3>
+                            <p>Data kandidat akan muncul di sini setelah mereka menyelesaikan interview</p>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+        
+        // Tampilkan error state
+        function showErrorState() {
+            const tbody = document.getElementById('candidateBody');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="4">
+                        <div class="empty-state">
+                            <h3 style="color: #dc3545;">❌ Gagal memuat data</h3>
+                            <p>Terjadi kesalahan saat memuat data kandidat. Silakan refresh halaman.</p>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+        
+        // Fungsi untuk menampilkan CV
+        function showCV(sessionId) {
+            const candidate = allCandidates.find(c => c.session_id === sessionId);
+            if (!candidate) return;
+            
+            document.getElementById('cvCandidateName').textContent = `CV - ${candidate.nama}`;
+            document.getElementById('cvContent').textContent = candidate.CV || 'CV tidak tersedia';
+            document.getElementById('cvModal').style.display = 'block';
+        }
+        
+        // Fungsi untuk menampilkan jawaban
+        function showAnswers(sessionId) {
+            const candidate = allCandidates.find(c => c.session_id === sessionId);
+            if (!candidate) return;
+            
+            document.getElementById('answersCandidateName').textContent = `Jawaban Interview - ${candidate.nama}`;
+            
+            const answersHTML = questions.map((question, index) => {
+                const qKey = `Q${index + 1}`;
+                const answer = candidate[qKey] || 'Tidak ada jawaban';
+                
+                return `
+                    <div class="answer-item">
+                        <h4>Pertanyaan ${index + 1}: ${question}</h4>
+                        <p>${answer}</p>
+                    </div>
+                `;
+            }).join('');
+            
+            document.getElementById('answersContent').innerHTML = answersHTML;
+            document.getElementById('answersModal').style.display = 'block';
+        }
+        
+        // Fungsi untuk menampilkan chat
+        function showChat(sessionId) {
+            currentSessionId = sessionId;
+            const candidate = allCandidates.find(c => c.session_id === sessionId);
+            if (!candidate) return;
+            
+            document.getElementById('chatCandidateName').textContent = `Chat AI - ${candidate.nama}`;
+            
+            // Reset chat messages
+            document.getElementById('chatMessages').innerHTML = `
+                <div class="message ai">
+                    <div class="message-content">
+                        Halo! Saya AI assistant. Saya siap membantu Anda menganalisis kandidat ${candidate.nama}. Apa yang ingin Anda ketahui?
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('chatModal').style.display = 'block';
+            document.getElementById('chatInput').value = '';
+            document.getElementById('chatInput').focus();
+        }
+        
+        // Fungsi untuk mengirim pesan
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            
+            if (!message || !currentSessionId) return;
+            
+            // Tambahkan pesan user
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML += `
+                <div class="message user">
+                    <div class="message-content">${escapeHtml(message)}</div>
+                </div>
+            `;
+            
+            input.value = '';
+            
+            // Scroll ke bawah
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            // Tampilkan typing indicator
+            chatMessages.innerHTML += `
+                <div class="message ai" id="typingIndicator">
+                    <div class="message-content">AI sedang memproses dengan RAG...</div>
+                </div>
+            `;
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            try {
+                // Kirim ke API backend yang akan forward ke n8n untuk RAG processing
+                const response = await fetch(`${API_BASE_URL}/api/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        session_id: currentSessionId,  // Ini akan jadi user_id di n8n
+                        message: message
+                    })
+                });
+                
+                const data = await response.json();
+                
+                // Hapus typing indicator
+                const typingIndicator = document.getElementById('typingIndicator');
+                if (typingIndicator) {
+                    typingIndicator.remove();
+                }
+                
+                // Tambahkan respons AI dari n8n
+                if (data.success && data.response) {
+                    chatMessages.innerHTML += `
+                        <div class="message ai">
+                            <div class="message-content">${escapeHtml(data.response)}</div>
+                        </div>
+                    `;
+                } else {
+                    // Tampilkan error jika gagal
+                    chatMessages.innerHTML += `
+                        <div class="message ai">
+                            <div class="message-content">Maaf, terjadi kesalahan: ${escapeHtml(data.error || 'Unknown error')}</div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+                
+                // Hapus typing indicator
+                const typingIndicator = document.getElementById('typingIndicator');
+                if (typingIndicator) {
+                    typingIndicator.remove();
+                }
+                
+                // Tampilkan error message
+                chatMessages.innerHTML += `
+                    <div class="message ai">
+                        <div class="message-content">Maaf, tidak dapat terhubung ke server. Silakan coba lagi.</div>
+                    </div>
+                `;
+            }
+            
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        // Helper function untuk escape HTML
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+        
+        // Fungsi untuk menutup modal
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+            if (modalId === 'chatModal') {
+                currentSessionId = null;
+            }
+        }
+        
+        // Event listener untuk Enter key di chat
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatInput = document.getElementById('chatInput');
+            if (chatInput) {
+                chatInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        sendMessage();
+                    }
+                });
+            }
+            
+            // Load kandidat saat halaman dimuat
+            loadCandidates();
+            
+            // Refresh data setiap 30 detik (untuk live update dari Supabase nanti)
+            setInterval(loadCandidates, 30000);
+        });
+        
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.style.display = 'none';
+                if (event.target.id === 'chatModal') {
+                    currentSessionId = null;
+                }
+            }
+        }
+    </script>
+</body>
+</html>

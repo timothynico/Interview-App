@@ -16,7 +16,8 @@ CV_DIR = "cv_uploads"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(CV_DIR, exist_ok=True)
 
-WEBHOOK_URL = "https://n8n-1.saturn.petra.ac.id/webhook-test/939b69b4-4d28-4531-b451-804809c2399c"
+WEBHOOK_URL = "https://n8n-1.saturn.petra.ac.id/webhook/939b69b4-4d28-4531-b451-804809c2399c"
+DASHBOARD_DATA_URL = "https://n8n-1.saturn.petra.ac.id/webhook/d14704c6-0264-43d4-a978-e17cccf06e45"
 
 # Menyimpan semua hasil transkripsi dan data kandidat
 all_transcripts = {}
@@ -38,14 +39,197 @@ def extract_text_from_pdf(pdf_path):
         return None
 
 
+def transform_n8n_data_to_candidate(user_data):
+    """Transform data dari n8n ke format kandidat untuk dashboard"""
+    documents = {doc['type']: doc['content'] for doc in user_data.get('documents', [])}
+    
+    return {
+        'id': user_data.get('user_id'),
+        'session_id': f"session_{user_data.get('user_id')}",
+        'nama': user_data.get('name', ''),
+        'email': user_data.get('email', ''),
+        'posisi_dilamar': user_data.get('posisi_dilamar'),  # Tidak ada di data n8n, bisa ditambahkan nanti
+        'status': 'complete',
+        'registered_at': datetime.now().isoformat(),  # Atau ambil dari timestamp jika ada
+        'CV': documents.get('CV', ''),
+        'Q1': documents.get('Q1', ''),
+        'Q2': documents.get('Q2', ''),
+        'Q3': documents.get('Q3', ''),
+        'Q4': documents.get('Q4', '')
+    }
+
+
 @app.route('/')
 def index():
     return send_from_directory('.', 'index.html')
 
 
+@app.route('/review')
+def review_page():
+    """Serve halaman review dashboard"""
+    return send_from_directory('.', 'review.html')
+
+
 @app.route('/videos/<path:filename>')
 def serve_video(filename):
     return send_from_directory('videos', filename)
+
+
+@app.route('/api/candidates', methods=['GET'])
+def get_candidates():
+    """API untuk mendapatkan list kandidat dari n8n"""
+    try:
+        # Fetch data dari n8n webhook
+        response = requests.get(DASHBOARD_DATA_URL, timeout=10)
+        
+        if response.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': f'Failed to fetch data from n8n: HTTP {response.status_code}'
+            }), 500
+        
+        data = response.json()
+        
+        # Transform data
+        # Jika response berisi single user_data
+        if 'user_data' in data:
+            candidates = [transform_n8n_data_to_candidate(data['user_data'])]
+        # Jika response berisi array of users
+        elif isinstance(data, list):
+            candidates = [transform_n8n_data_to_candidate(item.get('user_data', item)) for item in data]
+        # Jika response berisi users array
+        elif 'users' in data:
+            candidates = [transform_n8n_data_to_candidate(user) for user in data['users']]
+        else:
+            # Fallback: coba parse langsung
+            candidates = [transform_n8n_data_to_candidate(data)]
+        
+        return jsonify({
+            'success': True,
+            'candidates': candidates
+        })
+        
+    except requests.Timeout:
+        return jsonify({
+            'success': False,
+            'error': 'Request timeout - n8n tidak merespons'
+        }), 504
+    except requests.RequestException as e:
+        print(f"Error fetching candidates: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Network error: {str(e)}'
+        }), 500
+    except Exception as e:
+        print(f"Error processing candidates: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/candidate/<session_id>', methods=['GET'])
+def get_candidate_detail(session_id):
+    """API untuk mendapatkan detail kandidat berdasarkan session_id"""
+    try:
+        # Fetch semua kandidat
+        response = requests.get(DASHBOARD_DATA_URL, timeout=10)
+        
+        if response.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': f'Failed to fetch data from n8n: HTTP {response.status_code}'
+            }), 500
+        
+        data = response.json()
+        
+        # Transform dan cari kandidat yang sesuai
+        candidates = []
+        if 'user_data' in data:
+            candidates = [transform_n8n_data_to_candidate(data['user_data'])]
+        elif isinstance(data, list):
+            candidates = [transform_n8n_data_to_candidate(item.get('user_data', item)) for item in data]
+        elif 'users' in data:
+            candidates = [transform_n8n_data_to_candidate(user) for user in data['users']]
+        
+        # Cari kandidat dengan session_id yang sesuai
+        candidate = next((c for c in candidates if c['session_id'] == session_id), None)
+        
+        if not candidate:
+            return jsonify({
+                'success': False,
+                'error': 'Candidate not found'
+            }), 404
+        
+        return jsonify({
+            'success': True,
+            'candidate': candidate
+        })
+        
+    except Exception as e:
+        print(f"Error fetching candidate detail: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+N8N_CHAT_WEBHOOK = "https://n8n-1.saturn.petra.ac.id/webhook/YOUR_CHAT_WEBHOOK_ID"  # Ganti dengan webhook n8n Anda
+
+@app.route('/api/chat', methods=['POST'])
+def chat_with_ai():
+    """API untuk chat dengan AI - kirim ke n8n untuk RAG processing"""
+    try:
+        data = request.get_json()
+        session_id = data.get('session_id')
+        message = data.get('message')
+        
+        if not session_id or not message:
+            return jsonify({
+                'success': False,
+                'error': 'session_id dan message required'
+            }), 400
+        
+        # Kirim request ke n8n webhook untuk RAG processing
+        payload = {
+            'user_id': session_id,  # session_id sebagai user_id
+            'message': message,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # POST ke n8n
+        response = requests.post(
+            N8N_CHAT_WEBHOOK,
+            json=payload,
+            headers={'Content-Type': 'application/json'},
+            timeout=30  # 30 detik timeout untuk RAG processing
+        )
+        
+        if response.status_code == 200:
+            response_data = response.json()
+            # n8n mengembalikan response AI
+            ai_response = response_data.get('response', 'Maaf, tidak ada respons dari AI.')
+            
+            return jsonify({
+                'success': True,
+                'response': ai_response
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'n8n error: {response.status_code}'
+            }), 500
+            
+    except requests.Timeout:
+        return jsonify({
+            'success': False,
+            'error': 'Request timeout - AI membutuhkan waktu terlalu lama'
+        }), 504
+    except Exception as e:
+        print(f"Error chat with AI: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 @app.route('/upload-cv', methods=['POST'])
@@ -71,17 +255,17 @@ def upload_cv():
         cv_path = os.path.join(CV_DIR, cv_filename)
         cv_file.save(cv_path)
 
-        # 🔹 Extract teks dari PDF
+        # Extract teks dari PDF
         cv_text = extract_text_from_pdf(cv_path)
 
-        # Simpan info kandidat
+        # Simpan info kandidat dengan struktur yang match database
         candidate_info[session_id] = {
             "nama": name,
             "email": email,
             "posisi_dilamar": position,
             "cv_filename": cv_filename,
             "cv_path": cv_path,
-            "cv_text": cv_text,  # Simpan teks CV
+            "CV": cv_text,  # Sesuai dengan kolom di database
             "registered_at": datetime.now().isoformat()
         }
 
