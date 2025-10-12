@@ -173,7 +173,7 @@ def get_candidate_detail(session_id):
         }), 500
 
 
-N8N_CHAT_WEBHOOK = "https://n8n-1.saturn.petra.ac.id/webhook-test/d14704c6-0264-43d4-a978-e17cccf06e45"  # Ganti dengan webhook n8n Anda
+N8N_CHAT_WEBHOOK = "https://n8n-1.saturn.petra.ac.id/webhook/d14704c6-0264-43d4-a978-e17cccf06e45"  # Ganti dengan webhook n8n Anda
 
 @app.route('/api/chat', methods=['POST'])
 def chat_with_ai():
@@ -257,6 +257,7 @@ def upload_cv():
 
         # Extract teks dari PDF
         cv_text = extract_text_from_pdf(cv_path)
+        print('cv_text', cv_text)
 
         # Simpan info kandidat dengan struktur yang match database
         candidate_info[session_id] = {
@@ -333,7 +334,7 @@ def transcribe_audio():
                     "email": candidate.get("email", ""),
                     "posisi_dilamar": candidate.get("posisi_dilamar", ""),
                     
-                    "cv_text": candidate.get("cv_text", ""),
+                    "cv_text": candidate.get("CV", ""),
                     
                     # Transkrip Pertanyaan 1-4
                     "transkrip_pertanyaan_1": all_transcripts[session_id].get("pertanyaan_1", {}).get("transkrip", ""),
