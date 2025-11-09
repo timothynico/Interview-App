@@ -9,6 +9,7 @@ import base64
 import PyPDF2
 import mimetypes
 from contextlib import ExitStack
+from requests_toolbelt.multipart.encoder import MultipartEncoder
 
 app = Flask(__name__)
 CORS(app)
@@ -22,6 +23,7 @@ os.makedirs(CV_DIR, exist_ok=True)
 
 MAX_VIDEO_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB per video
 MAX_TOTAL_VIDEO_SIZE_BYTES = 80 * 1024 * 1024  # 80 MB untuk semua video
+MAX_WEBHOOK_PAYLOAD_BYTES = 80 * 1024 * 1024  # Batas ukuran payload webhook termasuk overhead multipart
 
 WEBHOOK_URL = "https://n8n-1.saturn.petra.ac.id/webhook/939b69b4-4d28-4531-b451-804809c2399c"
 DASHBOARD_DATA_URL = "https://n8n-1.saturn.petra.ac.id/webhook/d14704c6-0264-43d4-a978-e17cccf06e45"
@@ -409,18 +411,37 @@ def transcribe_audio():
                         # Sertakan nama file pada payload teks untuk referensi
                         form_data[f"video_{key}_filename"] = video_filename
 
-                    # Kirim ke webhook sebagai multipart/form-data agar video terkirim sebagai binary
+                    encoder_fields = {
+                        key: "" if value is None else str(value)
+                        for key, value in form_data.items()
+                    }
+
+                    for file_key, file_tuple in files_payload.items():
+                        encoder_fields[file_key] = file_tuple
+
+                    encoder = MultipartEncoder(fields=encoder_fields)
+
+                    if encoder.len > MAX_WEBHOOK_PAYLOAD_BYTES:
+                        raise ValueError(
+                            "Total data (video + transkrip) yang dikirim ke webhook melebihi 80MB. "
+                            "Mohon kurangi durasi rekaman agar ukurannya lebih kecil."
+                        )
+
+                    print(
+                        f"ℹ️ Ukuran payload webhook: {encoder.len / (1024 * 1024):.2f} MB"
+                    )
+
                     resp = requests.post(
                         WEBHOOK_URL,
-                        data=form_data,
-                        files=files_payload if files_payload else None,
+                        data=encoder,
+                        headers={"Content-Type": encoder.content_type},
                         timeout=20
                     )
 
                 if resp.status_code == 200:
                     webhook_status = "success"
                     print(f"✅ Semua data berhasil dikirim untuk session: {session_id}")
-                    
+
                     # Bersihkan data session
                     if session_id in all_transcripts:
                         del all_transcripts[session_id]
@@ -429,6 +450,12 @@ def transcribe_audio():
                 else:
                     webhook_status = f"failed (HTTP {resp.status_code})"
                     print(f"❌ Webhook gagal: {resp.status_code} - {resp.text}")
+
+                    if resp.status_code == 413:
+                        raise ValueError(
+                            "Server webhook menolak data karena ukurannya terlalu besar (HTTP 413). "
+                            "Silakan rekam ulang dengan durasi lebih singkat."
+                        )
 
             except ValueError as size_error:
                 webhook_status = f"error: {str(size_error)}"
