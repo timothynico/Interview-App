@@ -20,6 +20,9 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(VIDEO_OUTPUT_DIR, exist_ok=True)
 os.makedirs(CV_DIR, exist_ok=True)
 
+MAX_VIDEO_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB per video
+MAX_TOTAL_VIDEO_SIZE_BYTES = 80 * 1024 * 1024  # 80 MB untuk semua video
+
 WEBHOOK_URL = "https://n8n-1.saturn.petra.ac.id/webhook/939b69b4-4d28-4531-b451-804809c2399c"
 DASHBOARD_DATA_URL = "https://n8n-1.saturn.petra.ac.id/webhook/d14704c6-0264-43d4-a978-e17cccf06e45"
 
@@ -311,6 +314,18 @@ def transcribe_audio():
             video_filename = f"answer_q{question_number}_{timestamp}{video_extension}"
             video_path = os.path.join(VIDEO_OUTPUT_DIR, video_filename)
             video_file.save(video_path)
+
+            video_size = os.path.getsize(video_path)
+            if video_size > MAX_VIDEO_SIZE_BYTES:
+                if os.path.exists(video_path):
+                    os.remove(video_path)
+                if os.path.exists(save_path):
+                    os.remove(save_path)
+                return jsonify({
+                    'success': False,
+                    'error': 'Ukuran video melebihi batas 20MB. Mohon rekam ulang dengan durasi yang lebih singkat.'
+                }), 400
+
             video_url = f"/recorded_videos/{video_filename}"
 
         # Transkripsi suara
@@ -365,6 +380,7 @@ def transcribe_audio():
 
                 with ExitStack() as stack:
                     files_payload = {}
+                    total_video_size = 0
 
                     for idx in range(1, 5):
                         key = f"pertanyaan_{idx}"
@@ -377,6 +393,14 @@ def transcribe_audio():
 
                         if not os.path.exists(video_path):
                             continue
+
+                        video_size = os.path.getsize(video_path)
+                        if video_size > MAX_VIDEO_SIZE_BYTES:
+                            raise ValueError(f"Video untuk {key} melebihi batas 20MB.")
+
+                        total_video_size += video_size
+                        if total_video_size > MAX_TOTAL_VIDEO_SIZE_BYTES:
+                            raise ValueError("Total ukuran video melebihi batas 80MB.")
 
                         mime_type = mimetypes.guess_type(video_path)[0] or "application/octet-stream"
                         file_handle = stack.enter_context(open(video_path, "rb"))
@@ -406,6 +430,14 @@ def transcribe_audio():
                     webhook_status = f"failed (HTTP {resp.status_code})"
                     print(f"❌ Webhook gagal: {resp.status_code} - {resp.text}")
 
+            except ValueError as size_error:
+                webhook_status = f"error: {str(size_error)}"
+                return jsonify({
+                    'success': False,
+                    'error': str(size_error),
+                    'question_number': question_number,
+                    'webhook_status': webhook_status
+                }), 400
             except Exception as e:
                 webhook_status = f"error: {str(e)}"
                 print(f"❌ Error kirim webhook: {str(e)}")
