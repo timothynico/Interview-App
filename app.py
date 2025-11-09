@@ -7,13 +7,18 @@ import requests
 import json
 import base64
 import PyPDF2
+from moviepy.editor import VideoFileClip
+
+from process_video import analyze_video_confidence
 
 app = Flask(__name__)
 CORS(app)
 
 OUTPUT_DIR = "recordings"
+VIDEO_OUTPUT_DIR = "video_recordings"
 CV_DIR = "cv_uploads"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(VIDEO_OUTPUT_DIR, exist_ok=True)
 os.makedirs(CV_DIR, exist_ok=True)
 
 WEBHOOK_URL = "https://n8n-1.saturn.petra.ac.id/webhook/939b69b4-4d28-4531-b451-804809c2399c"
@@ -22,6 +27,7 @@ DASHBOARD_DATA_URL = "https://n8n-1.saturn.petra.ac.id/webhook/d14704c6-0264-43d
 # Menyimpan semua hasil transkripsi dan data kandidat
 all_transcripts = {}
 candidate_info = {}
+session_videos = {}
 
 
 def extract_text_from_pdf(pdf_path):
@@ -282,21 +288,50 @@ def upload_cv():
 @app.route('/transcribe', methods=['POST'])
 def transcribe_audio():
     try:
-        if 'audio' not in request.files:
-            return jsonify({'error': 'Tidak ada file audio'}), 400
+        video_file = request.files.get('video')
+        audio_file = request.files.get('audio')
 
-        audio_file = request.files['audio']
-        question_number = request.form.get('question_number', '0')
+        if not video_file and not audio_file:
+            return jsonify({'error': 'Tidak ada file media'}), 400
+
+        question_number = str(request.form.get('question_number', '0'))
         session_id = request.form.get('session_id', 'default')
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"answer_q{question_number}_{timestamp}.wav"
-        save_path = os.path.join(OUTPUT_DIR, filename)
-        audio_file.save(save_path)
+        extracted_audio_filename = f"answer_q{question_number}_{timestamp}.wav"
+        audio_save_path = os.path.join(OUTPUT_DIR, extracted_audio_filename)
+        media_filename = extracted_audio_filename
+        media_save_path = audio_save_path
+
+        if video_file:
+            ext = os.path.splitext(video_file.filename)[1] or '.webm'
+            media_filename = f"answer_q{question_number}_{timestamp}{ext}"
+            media_save_path = os.path.join(VIDEO_OUTPUT_DIR, media_filename)
+            video_file.save(media_save_path)
+
+            try:
+                with VideoFileClip(media_save_path) as clip:
+                    if clip.audio is None:
+                        raise ValueError("Video tidak memiliki audio untuk ditranskripsi.")
+                    clip.audio.write_audiofile(
+                        audio_save_path,
+                        fps=16000,
+                        codec="pcm_s16le",
+                        nbytes=2,
+                        logger=None
+                    )
+            except Exception as e:
+                return jsonify({'error': f'Gagal mengekstrak audio dari video: {str(e)}'}), 500
+
+            if session_id not in session_videos:
+                session_videos[session_id] = {}
+            session_videos[session_id][f"pertanyaan_{question_number}"] = media_save_path
+        else:
+            audio_file.save(audio_save_path)
 
         # Transkripsi suara
         recognizer = sr.Recognizer()
-        with sr.AudioFile(save_path) as source:
+        with sr.AudioFile(audio_save_path) as source:
             audio_data = recognizer.record(source)
             try:
                 text = recognizer.recognize_google(audio_data, language="id-ID")
@@ -312,23 +347,33 @@ def transcribe_audio():
         all_transcripts[session_id][f"pertanyaan_{question_number}"] = {
             "transkrip": text,
             "timestamp": timestamp,
-            "filename": filename
+            "filename": media_filename
         }
 
         webhook_status = "pending"
+        video_analysis_payload = {}
 
-                        # Kalau sudah pertanyaan terakhir (q4) → kirim semua ke n8n
+        # Kalau sudah pertanyaan terakhir (q4) → kirim semua ke n8n
         if question_number == "4":
             try:
                 # Ambil data kandidat
                 candidate = candidate_info.get(session_id, {})
-                cv_path = candidate.get("cv_path")
+
+                # Analisis seluruh video yang direkam
+                session_video_files = session_videos.get(session_id, {})
+                for key in sorted(session_video_files.keys()):
+                    video_path = session_video_files[key]
+                    try:
+                        analysis_text = analyze_video_confidence(video_path)
+                    except Exception as analysis_error:
+                        analysis_text = f"Error analisis video: {str(analysis_error)}"
+                    video_analysis_payload[f"analisis_{key}"] = analysis_text
 
                 # 🔹 Struktur payload dengan CV TEXT (bukan file)
                 payload = {
                     "session_id": session_id,
                     "timestamp_completed": datetime.now().isoformat(),
-                    
+
                     # Data Kandidat
                     "nama": candidate.get("nama", ""),
                     "email": candidate.get("email", ""),
@@ -342,6 +387,9 @@ def transcribe_audio():
                     "transkrip_pertanyaan_3": all_transcripts[session_id].get("pertanyaan_3", {}).get("transkrip", ""),
                     "transkrip_pertanyaan_4": all_transcripts[session_id].get("pertanyaan_4", {}).get("transkrip", ""),
                 }
+
+                if video_analysis_payload:
+                    payload["analisis_video"] = video_analysis_payload
 
                 # Kirim ke webhook sebagai JSON (SEMUA DATA DALAM 1 REQUEST!)
                 resp = requests.post(
@@ -360,6 +408,8 @@ def transcribe_audio():
                         del all_transcripts[session_id]
                     if session_id in candidate_info:
                         del candidate_info[session_id]
+                    if session_id in session_videos:
+                        del session_videos[session_id]
                 else:
                     webhook_status = f"failed (HTTP {resp.status_code})"
                     print(f"❌ Webhook gagal: {resp.status_code} - {resp.text}")
@@ -371,7 +421,7 @@ def transcribe_audio():
         return jsonify({
             'success': True,
             'transcript': text,
-            'filename': filename,
+            'filename': media_filename,
             'question_number': question_number,
             'webhook_status': webhook_status,
             'is_last_question': question_number == "4"

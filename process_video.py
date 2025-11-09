@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 import os
 from google import genai
 from google.genai import types
+import mimetypes
 
 load_dotenv()
 
@@ -12,6 +13,8 @@ def analyze_video_confidence(video_path: str):
 
     with open(video_path, "rb") as f:
         video_bytes = f.read()
+
+    mime_type = mimetypes.guess_type(video_path)[0] or "video/mp4"
 
     # Prompt yang diperbagus dan terstruktur
     prompt = """
@@ -35,7 +38,7 @@ def analyze_video_confidence(video_path: str):
                 types.Part(
                     inline_data=types.Blob(
                         data=video_bytes,
-                        mime_type="video/mp4"
+                        mime_type=mime_type
                     )
                 ),
                 types.Part(text=prompt)

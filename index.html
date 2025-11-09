@@ -165,14 +165,14 @@
                   id="record-btn"
                   class="bg-red-500 hover:bg-red-600 text-white font-bold py-4 px-8 rounded-full shadow-lg transform transition hover:scale-105 flex items-center gap-3"
                 >
-                  <i class="fas fa-microphone text-2xl"></i>
-                  <span>Mulai Merekam</span>
+                  <i class="fas fa-video text-2xl"></i>
+                  <span>Mulai Rekam Video</span>
                 </button>
 
                 <div id="recording-status" class="hidden">
                   <div class="flex items-center gap-3 text-red-600 font-semibold">
                     <div class="w-4 h-4 bg-red-600 rounded-full animate-pulse"></div>
-                    <span>Sedang Merekam...</span>
+                    <span>Sedang Merekam Video...</span>
                     <span id="record-timer">00:00</span>
                   </div>
                 </div>
@@ -186,10 +186,20 @@
                 </button>
               </div>
 
-              <!-- Audio Preview -->
-              <div id="audio-preview" class="hidden mb-6">
-                <p class="text-sm text-gray-600 mb-2">Preview Audio:</p>
-                <audio id="preview-audio" controls class="w-full"></audio>
+              <div class="mb-6">
+                <video
+                  id="live-preview"
+                  class="hidden w-full rounded-lg border-2 border-indigo-200"
+                  autoplay
+                  muted
+                  playsinline
+                ></video>
+              </div>
+
+              <!-- Video Preview -->
+              <div id="video-preview" class="hidden mb-6">
+                <p class="text-sm text-gray-600 mb-2">Preview Video:</p>
+                <video id="preview-video" controls class="w-full rounded-lg border border-gray-200"></video>
               </div>
 
               <!-- Transcript -->
@@ -214,7 +224,7 @@
               <!-- Loading -->
               <div id="loading" class="hidden text-center py-4">
                 <i class="fas fa-spinner fa-spin text-4xl text-indigo-600"></i>
-                <p class="text-gray-600 mt-2">Memproses audio...</p>
+                <p class="text-gray-600 mt-2">Memproses video...</p>
               </div>
             </div>
 
@@ -268,6 +278,7 @@
       let recordedBlob;
       let recordingStartTime;
       let timerInterval;
+      let mediaStream;
       let candidateData = {};
 
       // Generate unique session ID
@@ -286,8 +297,9 @@
       const stopBtn = document.getElementById("stop-btn");
       const submitBtn = document.getElementById("submit-btn");
       const recordingStatus = document.getElementById("recording-status");
-      const audioPreview = document.getElementById("audio-preview");
-      const previewAudio = document.getElementById("preview-audio");
+      const livePreview = document.getElementById("live-preview");
+      const videoPreview = document.getElementById("video-preview");
+      const previewVideo = document.getElementById("preview-video");
       const transcriptSection = document.getElementById("transcript-section");
       const transcriptText = document.getElementById("transcript-text");
       const loading = document.getElementById("loading");
@@ -373,7 +385,14 @@
         // Reset UI
         recordingSection.classList.add("hidden");
         videoInstruction.classList.remove("hidden");
-        audioPreview.classList.add("hidden");
+        if (livePreview.srcObject) {
+          livePreview.srcObject.getTracks().forEach((track) => track.stop());
+          livePreview.srcObject = null;
+        }
+        livePreview.classList.add("hidden");
+        videoPreview.classList.add("hidden");
+        recordedBlob = null;
+        mediaStream = null;
         transcriptSection.classList.add("hidden");
         submitBtn.classList.add("hidden");
         recordBtn.classList.remove("hidden");
@@ -387,7 +406,7 @@
         recordingSection.classList.remove("hidden");
       });
 
-      // Start recording dengan RecordRTC (WAV format)
+      // Start recording dengan RecordRTC (Video + Audio)
       recordBtn.addEventListener("click", async () => {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
@@ -395,16 +414,24 @@
               sampleRate: 16000,
               channelCount: 1,
               echoCancellation: true,
-              noiseSuppression: true
-            }
+              noiseSuppression: true,
+            },
+            video: {
+              facingMode: "user",
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
           });
-          
+
+          mediaStream = stream;
+          livePreview.srcObject = stream;
+          livePreview.classList.remove("hidden");
+          livePreview.play();
+
           recorder = RecordRTC(stream, {
-            type: 'audio',
-            mimeType: 'audio/wav',
-            recorderType: RecordRTC.StereoAudioRecorder,
-            numberOfAudioChannels: 1,
-            desiredSampRate: 16000
+            type: "video",
+            mimeType: "video/webm;codecs=vp9",
+            disableLogs: true,
           });
 
           recorder.startRecording();
@@ -415,21 +442,38 @@
           recordingStartTime = Date.now();
           timerInterval = setInterval(updateTimer, 1000);
         } catch (err) {
-          alert("Error mengakses microphone: " + err.message);
+          alert("Error mengakses kamera/mikrofon: " + err.message);
         }
       });
 
       // Stop recording
       stopBtn.addEventListener("click", () => {
-        recorder.stopRecording(function() {
+        if (!recorder) return;
+
+        recorder.stopRecording(function () {
           recordedBlob = recorder.getBlob();
-          previewAudio.src = URL.createObjectURL(recordedBlob);
-          audioPreview.classList.remove("hidden");
+          previewVideo.src = URL.createObjectURL(recordedBlob);
+          previewVideo.load();
+          videoPreview.classList.remove("hidden");
           submitBtn.classList.remove("hidden");
-          
-          recorder.stream.getTracks().forEach(track => track.stop());
+
+          if (recorder.stream) {
+            recorder.stream.getTracks().forEach((track) => track.stop());
+          }
+
+          if (mediaStream) {
+            mediaStream.getTracks().forEach((track) => track.stop());
+            mediaStream = null;
+          }
+
+          if (livePreview.srcObject) {
+            livePreview.srcObject.getTracks().forEach((track) => track.stop());
+            livePreview.srcObject = null;
+          }
+
+          livePreview.classList.add("hidden");
         });
-        
+
         stopBtn.classList.add("hidden");
         recordBtn.classList.remove("hidden");
         recordingStatus.classList.add("hidden");
@@ -446,11 +490,15 @@
 
       // Submit answer
       submitBtn.addEventListener("click", async () => {
+        if (!recordedBlob) {
+          alert("Silakan rekam jawaban video terlebih dahulu.");
+          return;
+        }
         loading.classList.remove("hidden");
         submitBtn.classList.add("hidden");
 
         const formData = new FormData();
-        formData.append("audio", recordedBlob, "recording.wav");
+        formData.append("video", recordedBlob, "recording.webm");
         formData.append("question_number", currentQuestion + 1);
         formData.append("session_id", sessionId);
 
