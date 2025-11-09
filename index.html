@@ -155,7 +155,7 @@
           <div class="p-8">
             <div id="recording-section" class="hidden">
               <h3 class="text-xl font-semibold text-gray-800 mb-4">
-                <i class="fas fa-microphone text-red-500 mr-2"></i>
+                <i class="fas fa-video text-red-500 mr-2"></i>
                 Rekam Jawaban Anda
               </h3>
 
@@ -165,7 +165,7 @@
                   id="record-btn"
                   class="bg-red-500 hover:bg-red-600 text-white font-bold py-4 px-8 rounded-full shadow-lg transform transition hover:scale-105 flex items-center gap-3"
                 >
-                  <i class="fas fa-microphone text-2xl"></i>
+                  <i class="fas fa-video text-2xl"></i>
                   <span>Mulai Merekam</span>
                 </button>
 
@@ -186,10 +186,10 @@
                 </button>
               </div>
 
-              <!-- Audio Preview -->
-              <div id="audio-preview" class="hidden mb-6">
-                <p class="text-sm text-gray-600 mb-2">Preview Audio:</p>
-                <audio id="preview-audio" controls class="w-full"></audio>
+              <!-- Video Preview -->
+              <div id="video-preview" class="hidden mb-6">
+                <p class="text-sm text-gray-600 mb-2">Preview Video:</p>
+                <video id="preview-video" controls class="w-full rounded-xl shadow"></video>
               </div>
 
               <!-- Transcript -->
@@ -264,8 +264,11 @@
       ];
 
       let currentQuestion = 0;
-      let recorder;
-      let recordedBlob;
+      let mediaStream;
+      let audioRecorder;
+      let videoRecorder;
+      let recordedAudioBlob;
+      let recordedVideoBlob;
       let recordingStartTime;
       let timerInterval;
       let candidateData = {};
@@ -286,8 +289,8 @@
       const stopBtn = document.getElementById("stop-btn");
       const submitBtn = document.getElementById("submit-btn");
       const recordingStatus = document.getElementById("recording-status");
-      const audioPreview = document.getElementById("audio-preview");
-      const previewAudio = document.getElementById("preview-audio");
+      const videoPreview = document.getElementById("video-preview");
+      const previewVideo = document.getElementById("preview-video");
       const transcriptSection = document.getElementById("transcript-section");
       const transcriptText = document.getElementById("transcript-text");
       const loading = document.getElementById("loading");
@@ -371,9 +374,22 @@
         } dari ${questions.length}`;
 
         // Reset UI
+        recordedAudioBlob = null;
+        recordedVideoBlob = null;
         recordingSection.classList.add("hidden");
         videoInstruction.classList.remove("hidden");
-        audioPreview.classList.add("hidden");
+        videoPreview.classList.add("hidden");
+        if (previewVideo.srcObject) {
+          previewVideo.srcObject.getTracks().forEach((track) => track.stop());
+          previewVideo.srcObject = null;
+        }
+        if (previewVideo.src) {
+          if (previewVideo.src.startsWith("blob:")) {
+            URL.revokeObjectURL(previewVideo.src);
+          }
+          previewVideo.removeAttribute("src");
+          previewVideo.load();
+        }
         transcriptSection.classList.add("hidden");
         submitBtn.classList.add("hidden");
         recordBtn.classList.remove("hidden");
@@ -387,53 +403,114 @@
         recordingSection.classList.remove("hidden");
       });
 
-      // Start recording dengan RecordRTC (WAV format)
+      // Start recording video + audio dengan RecordRTC
       recordBtn.addEventListener("click", async () => {
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({
+          if (mediaStream) {
+            mediaStream.getTracks().forEach((track) => track.stop());
+          }
+
+          mediaStream = await navigator.mediaDevices.getUserMedia({
             audio: {
               sampleRate: 16000,
               channelCount: 1,
               echoCancellation: true,
-              noiseSuppression: true
-            }
-          });
-          
-          recorder = RecordRTC(stream, {
-            type: 'audio',
-            mimeType: 'audio/wav',
-            recorderType: RecordRTC.StereoAudioRecorder,
-            numberOfAudioChannels: 1,
-            desiredSampRate: 16000
+              noiseSuppression: true,
+            },
+            video: {
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              facingMode: "user",
+            },
           });
 
-          recorder.startRecording();
+          audioRecorder = RecordRTC(mediaStream, {
+            type: "audio",
+            mimeType: "audio/wav",
+            recorderType: RecordRTC.StereoAudioRecorder,
+            numberOfAudioChannels: 1,
+            desiredSampRate: 16000,
+          });
+
+          videoRecorder = RecordRTC(mediaStream, {
+            type: "video",
+            mimeType: "video/webm;codecs=vp8,opus",
+          });
+
+          recordedAudioBlob = null;
+          recordedVideoBlob = null;
+
+          audioRecorder.startRecording();
+          videoRecorder.startRecording();
           recordBtn.classList.add("hidden");
           stopBtn.classList.remove("hidden");
           recordingStatus.classList.remove("hidden");
+          videoPreview.classList.remove("hidden");
+          previewVideo.srcObject = mediaStream;
+          previewVideo.muted = true;
+          previewVideo.play().catch(() => {});
 
           recordingStartTime = Date.now();
           timerInterval = setInterval(updateTimer, 1000);
         } catch (err) {
-          alert("Error mengakses microphone: " + err.message);
+          alert("Error mengakses kamera/mikrofon: " + err.message);
         }
       });
 
       // Stop recording
-      stopBtn.addEventListener("click", () => {
-        recorder.stopRecording(function() {
-          recordedBlob = recorder.getBlob();
-          previewAudio.src = URL.createObjectURL(recordedBlob);
-          audioPreview.classList.remove("hidden");
-          submitBtn.classList.remove("hidden");
-          
-          recorder.stream.getTracks().forEach(track => track.stop());
-        });
-        
+      stopBtn.addEventListener("click", async () => {
         stopBtn.classList.add("hidden");
         recordBtn.classList.remove("hidden");
         recordingStatus.classList.add("hidden");
         clearInterval(timerInterval);
+
+        try {
+          await Promise.all([
+            audioRecorder
+              ? new Promise((resolve, reject) => {
+                  try {
+                    audioRecorder.stopRecording(() => resolve());
+                  } catch (error) {
+                    reject(error);
+                  }
+                })
+              : Promise.resolve(),
+            videoRecorder
+              ? new Promise((resolve, reject) => {
+                  try {
+                    videoRecorder.stopRecording(() => resolve());
+                  } catch (error) {
+                    reject(error);
+                  }
+                })
+              : Promise.resolve(),
+          ]);
+
+          recordedAudioBlob = audioRecorder ? audioRecorder.getBlob() : null;
+          recordedVideoBlob = videoRecorder ? videoRecorder.getBlob() : null;
+
+          if (previewVideo.srcObject) {
+            previewVideo.srcObject.getTracks().forEach((track) => track.stop());
+            previewVideo.srcObject = null;
+          }
+
+          if (recordedVideoBlob) {
+            previewVideo.src = URL.createObjectURL(recordedVideoBlob);
+            previewVideo.muted = false;
+            previewVideo.load();
+            previewVideo.play().catch(() => {});
+          }
+
+          videoPreview.classList.remove("hidden");
+          submitBtn.classList.remove("hidden");
+        } catch (err) {
+          alert("Error menghentikan rekaman: " + err.message);
+        } finally {
+          if (mediaStream) {
+            mediaStream.getTracks().forEach((track) => track.stop());
+            mediaStream = null;
+          }
+        }
       });
 
       // Update timer
@@ -449,8 +526,18 @@
         loading.classList.remove("hidden");
         submitBtn.classList.add("hidden");
 
+        if (!recordedAudioBlob) {
+          alert("Rekaman belum tersedia. Silakan coba merekam ulang.");
+          loading.classList.add("hidden");
+          submitBtn.classList.remove("hidden");
+          return;
+        }
+
         const formData = new FormData();
-        formData.append("audio", recordedBlob, "recording.wav");
+        formData.append("audio", recordedAudioBlob, "recording.wav");
+        if (recordedVideoBlob) {
+          formData.append("video", recordedVideoBlob, "recording.webm");
+        }
         formData.append("question_number", currentQuestion + 1);
         formData.append("session_id", sessionId);
 
@@ -465,6 +552,18 @@
           if (result.success) {
             transcriptText.textContent = result.transcript;
             transcriptSection.classList.remove("hidden");
+
+            if (result.video_url) {
+              previewVideo.srcObject = null;
+              if (previewVideo.src && previewVideo.src.startsWith("blob:")) {
+                URL.revokeObjectURL(previewVideo.src);
+              }
+              previewVideo.src = `http://127.0.0.1:5000${result.video_url}`;
+              previewVideo.muted = false;
+              previewVideo.load();
+              previewVideo.play().catch(() => {});
+              videoPreview.classList.remove("hidden");
+            }
 
             if (result.is_last_question && result.webhook_status === "success") {
               const successMsg = document.createElement("div");
