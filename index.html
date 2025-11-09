@@ -274,8 +274,10 @@
       ];
 
       let currentQuestion = 0;
-      let recorder;
-      let recordedBlob;
+      let videoRecorder;
+      let audioRecorder;
+      let recordedVideoBlob;
+      let recordedAudioBlob;
       let recordingStartTime;
       let timerInterval;
       let mediaStream;
@@ -391,7 +393,8 @@
         }
         livePreview.classList.add("hidden");
         videoPreview.classList.add("hidden");
-        recordedBlob = null;
+        recordedVideoBlob = null;
+        recordedAudioBlob = null;
         mediaStream = null;
         transcriptSection.classList.add("hidden");
         submitBtn.classList.add("hidden");
@@ -428,13 +431,22 @@
           livePreview.classList.remove("hidden");
           livePreview.play();
 
-          recorder = RecordRTC(stream, {
+          videoRecorder = RecordRTC(stream, {
             type: "video",
             mimeType: "video/webm;codecs=vp9",
             disableLogs: true,
           });
 
-          recorder.startRecording();
+          audioRecorder = RecordRTC(stream, {
+            type: "audio",
+            mimeType: "audio/wav",
+            recorderType: RecordRTC.StereoAudioRecorder,
+            numberOfAudioChannels: 1,
+            desiredSampRate: 16000,
+          });
+
+          videoRecorder.startRecording();
+          audioRecorder.startRecording();
           recordBtn.classList.add("hidden");
           stopBtn.classList.remove("hidden");
           recordingStatus.classList.remove("hidden");
@@ -447,33 +459,47 @@
       });
 
       // Stop recording
-      stopBtn.addEventListener("click", () => {
-        if (!recorder) return;
+      stopBtn.addEventListener("click", async () => {
+        if (!videoRecorder || !audioRecorder) return;
 
-        recorder.stopRecording(function () {
-          recordedBlob = recorder.getBlob();
-          previewVideo.src = URL.createObjectURL(recordedBlob);
-          previewVideo.load();
-          videoPreview.classList.remove("hidden");
-          submitBtn.classList.remove("hidden");
+        stopBtn.disabled = true;
 
-          if (recorder.stream) {
-            recorder.stream.getTracks().forEach((track) => track.stop());
-          }
-
-          if (mediaStream) {
-            mediaStream.getTracks().forEach((track) => track.stop());
-            mediaStream = null;
-          }
-
-          if (livePreview.srcObject) {
-            livePreview.srcObject.getTracks().forEach((track) => track.stop());
-            livePreview.srcObject = null;
-          }
-
-          livePreview.classList.add("hidden");
+        const stopVideo = new Promise((resolve) => {
+          videoRecorder.stopRecording(() => resolve(videoRecorder.getBlob()));
         });
 
+        const stopAudio = new Promise((resolve) => {
+          audioRecorder.stopRecording(() => resolve(audioRecorder.getBlob()));
+        });
+
+        const [videoBlob, audioBlob] = await Promise.all([stopVideo, stopAudio]);
+
+        recordedVideoBlob = videoBlob;
+        recordedAudioBlob = audioBlob;
+
+        previewVideo.src = URL.createObjectURL(recordedVideoBlob);
+        previewVideo.load();
+        videoPreview.classList.remove("hidden");
+        submitBtn.classList.remove("hidden");
+
+        videoRecorder.destroy();
+        audioRecorder.destroy();
+        videoRecorder = null;
+        audioRecorder = null;
+
+        if (mediaStream) {
+          mediaStream.getTracks().forEach((track) => track.stop());
+          mediaStream = null;
+        }
+
+        if (livePreview.srcObject) {
+          livePreview.srcObject.getTracks().forEach((track) => track.stop());
+          livePreview.srcObject = null;
+        }
+
+        livePreview.classList.add("hidden");
+
+        stopBtn.disabled = false;
         stopBtn.classList.add("hidden");
         recordBtn.classList.remove("hidden");
         recordingStatus.classList.add("hidden");
@@ -490,7 +516,7 @@
 
       // Submit answer
       submitBtn.addEventListener("click", async () => {
-        if (!recordedBlob) {
+        if (!recordedVideoBlob || !recordedAudioBlob) {
           alert("Silakan rekam jawaban video terlebih dahulu.");
           return;
         }
@@ -498,7 +524,16 @@
         submitBtn.classList.add("hidden");
 
         const formData = new FormData();
-        formData.append("video", recordedBlob, "recording.webm");
+        formData.append(
+          "video",
+          recordedVideoBlob,
+          `answer_q${currentQuestion + 1}.webm`
+        );
+        formData.append(
+          "audio",
+          recordedAudioBlob,
+          `answer_q${currentQuestion + 1}.wav`
+        );
         formData.append("question_number", currentQuestion + 1);
         formData.append("session_id", sessionId);
 

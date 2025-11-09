@@ -7,8 +7,6 @@ import requests
 import json
 import base64
 import PyPDF2
-from moviepy.editor import VideoFileClip
-
 from process_video import analyze_video_confidence
 
 app = Flask(__name__)
@@ -309,25 +307,16 @@ def transcribe_audio():
             media_save_path = os.path.join(VIDEO_OUTPUT_DIR, media_filename)
             video_file.save(media_save_path)
 
-            try:
-                with VideoFileClip(media_save_path) as clip:
-                    if clip.audio is None:
-                        raise ValueError("Video tidak memiliki audio untuk ditranskripsi.")
-                    clip.audio.write_audiofile(
-                        audio_save_path,
-                        fps=16000,
-                        codec="pcm_s16le",
-                        nbytes=2,
-                        logger=None
-                    )
-            except Exception as e:
-                return jsonify({'error': f'Gagal mengekstrak audio dari video: {str(e)}'}), 500
-
             if session_id not in session_videos:
                 session_videos[session_id] = {}
             session_videos[session_id][f"pertanyaan_{question_number}"] = media_save_path
-        else:
+
+        if audio_file:
             audio_file.save(audio_save_path)
+        elif video_file:
+            return jsonify({'error': 'Audio tidak ditemukan, silakan rekam ulang.'}), 400
+        else:
+            return jsonify({'error': 'File audio diperlukan untuk transkripsi.'}), 400
 
         # Transkripsi suara
         recognizer = sr.Recognizer()

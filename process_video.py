@@ -6,6 +6,7 @@ import mimetypes
 
 load_dotenv()
 
+
 def analyze_video_confidence(video_path: str):
     """Analisis video untuk mendeteksi apakah seseorang terlihat percaya diri."""
 
@@ -14,7 +15,7 @@ def analyze_video_confidence(video_path: str):
     with open(video_path, "rb") as f:
         video_bytes = f.read()
 
-    mime_type = mimetypes.guess_type(video_path)[0] or "video/mp4"
+    mime_type = mimetypes.guess_type(video_path)[0] or "video/webm"
 
     # Prompt yang diperbagus dan terstruktur
     prompt = """
