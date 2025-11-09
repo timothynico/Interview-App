@@ -1,0 +1,27 @@
+# Ignore environment variable file
+.env
+.env.*  # kalau ada .env.dev, .env.local, dll
+
+# Ignore Python cache & compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore virtual environments
+venv/
+.env/
+.venv/
+
+# Ignore IDE configs
+.vscode/
+.idea/
+
+# Ignore log & temp files
+*.log
+tmp/
+*.tmp
+
+# Ignore OS generated files
+.DS_Store
+Thumbs.db
