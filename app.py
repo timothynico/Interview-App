@@ -7,13 +7,17 @@ import requests
 import json
 import base64
 import PyPDF2
+import mimetypes
+from contextlib import ExitStack
 
 app = Flask(__name__)
 CORS(app)
 
 OUTPUT_DIR = "recordings"
+VIDEO_OUTPUT_DIR = "video_recordings"
 CV_DIR = "cv_uploads"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(VIDEO_OUTPUT_DIR, exist_ok=True)
 os.makedirs(CV_DIR, exist_ok=True)
 
 WEBHOOK_URL = "https://n8n-1.saturn.petra.ac.id/webhook/939b69b4-4d28-4531-b451-804809c2399c"
@@ -73,6 +77,11 @@ def review_page():
 @app.route('/videos/<path:filename>')
 def serve_video(filename):
     return send_from_directory('videos', filename)
+
+
+@app.route('/recorded_videos/<path:filename>')
+def serve_recorded_video(filename):
+    return send_from_directory(VIDEO_OUTPUT_DIR, filename)
 
 
 @app.route('/api/candidates', methods=['GET'])
@@ -286,6 +295,7 @@ def transcribe_audio():
             return jsonify({'error': 'Tidak ada file audio'}), 400
 
         audio_file = request.files['audio']
+        video_file = request.files.get('video')
         question_number = request.form.get('question_number', '0')
         session_id = request.form.get('session_id', 'default')
 
@@ -293,6 +303,15 @@ def transcribe_audio():
         filename = f"answer_q{question_number}_{timestamp}.wav"
         save_path = os.path.join(OUTPUT_DIR, filename)
         audio_file.save(save_path)
+
+        video_filename = None
+        video_url = None
+        if video_file:
+            video_extension = os.path.splitext(video_file.filename)[1] or '.webm'
+            video_filename = f"answer_q{question_number}_{timestamp}{video_extension}"
+            video_path = os.path.join(VIDEO_OUTPUT_DIR, video_filename)
+            video_file.save(video_path)
+            video_url = f"/recorded_videos/{video_filename}"
 
         # Transkripsi suara
         recognizer = sr.Recognizer()
@@ -312,7 +331,8 @@ def transcribe_audio():
         all_transcripts[session_id][f"pertanyaan_{question_number}"] = {
             "transkrip": text,
             "timestamp": timestamp,
-            "filename": filename
+            "filename": filename,
+            "video_filename": video_filename
         }
 
         webhook_status = "pending"
@@ -324,18 +344,18 @@ def transcribe_audio():
                 candidate = candidate_info.get(session_id, {})
                 cv_path = candidate.get("cv_path")
 
-                # 🔹 Struktur payload dengan CV TEXT (bukan file)
-                payload = {
+                # 🔹 Struktur payload form-data
+                form_data = {
                     "session_id": session_id,
                     "timestamp_completed": datetime.now().isoformat(),
-                    
+
                     # Data Kandidat
                     "nama": candidate.get("nama", ""),
                     "email": candidate.get("email", ""),
                     "posisi_dilamar": candidate.get("posisi_dilamar", ""),
-                    
+
                     "cv_text": candidate.get("CV", ""),
-                    
+
                     # Transkrip Pertanyaan 1-4
                     "transkrip_pertanyaan_1": all_transcripts[session_id].get("pertanyaan_1", {}).get("transkrip", ""),
                     "transkrip_pertanyaan_2": all_transcripts[session_id].get("pertanyaan_2", {}).get("transkrip", ""),
@@ -343,13 +363,35 @@ def transcribe_audio():
                     "transkrip_pertanyaan_4": all_transcripts[session_id].get("pertanyaan_4", {}).get("transkrip", ""),
                 }
 
-                # Kirim ke webhook sebagai JSON (SEMUA DATA DALAM 1 REQUEST!)
-                resp = requests.post(
-                    WEBHOOK_URL,
-                    json=payload,
-                    headers={"Content-Type": "application/json"},
-                    timeout=20
-                )
+                with ExitStack() as stack:
+                    files_payload = {}
+
+                    for idx in range(1, 5):
+                        key = f"pertanyaan_{idx}"
+                        video_filename = all_transcripts[session_id].get(key, {}).get("video_filename")
+
+                        if not video_filename:
+                            continue
+
+                        video_path = os.path.join(VIDEO_OUTPUT_DIR, video_filename)
+
+                        if not os.path.exists(video_path):
+                            continue
+
+                        mime_type = mimetypes.guess_type(video_path)[0] or "application/octet-stream"
+                        file_handle = stack.enter_context(open(video_path, "rb"))
+                        files_payload[f"video_{key}"] = (video_filename, file_handle, mime_type)
+
+                        # Sertakan nama file pada payload teks untuk referensi
+                        form_data[f"video_{key}_filename"] = video_filename
+
+                    # Kirim ke webhook sebagai multipart/form-data agar video terkirim sebagai binary
+                    resp = requests.post(
+                        WEBHOOK_URL,
+                        data=form_data,
+                        files=files_payload if files_payload else None,
+                        timeout=20
+                    )
 
                 if resp.status_code == 200:
                     webhook_status = "success"
@@ -374,7 +416,9 @@ def transcribe_audio():
             'filename': filename,
             'question_number': question_number,
             'webhook_status': webhook_status,
-            'is_last_question': question_number == "4"
+            'is_last_question': question_number == "4",
+            'video_filename': video_filename,
+            'video_url': video_url
         })
 
     except Exception as e:
