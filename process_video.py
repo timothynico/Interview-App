@@ -24,7 +24,10 @@ def analyze_video_confidence(video_path: str):
 
             Ikuti format output wajib berikut:
             analisis: [penjelasan lengkap berdasarkan video]
-            kesimpulan: [ya/tidak]
+            kesimpulan: [level]
+
+            level ini berupa 0 sampai 100, 0 berarti sangat tidak percaya diri, 100 berarti sangat percaya diri.
+            Isi bagian [level] hanya dengan angka.
 
             Aturan:
             - "ya" berarti orang tersebut percaya diri
@@ -48,3 +51,9 @@ def analyze_video_confidence(video_path: str):
     )
 
     return response.text
+
+
+if __name__ == "__main__":
+    video_path = "video_recordings/answer_q1_20251109_145451.webm"
+    result = analyze_video_confidence(video_path)
+    print(result)
