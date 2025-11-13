@@ -25,12 +25,15 @@
       </div>
 
       <!-- Registration Form -->
-      <div id="registration-form" class="bg-white rounded-2xl shadow-xl p-8 mb-6">
+      <div
+        id="registration-form"
+        class="bg-white rounded-2xl shadow-xl p-8 mb-6"
+      >
         <h2 class="text-2xl font-bold text-gray-800 mb-6">
           <i class="fas fa-user-circle text-indigo-600 mr-2"></i>
           Data Kandidat
         </h2>
-        
+
         <form id="candidate-form" class="space-y-5">
           <!-- Nama -->
           <div>
@@ -95,9 +98,14 @@
                 class="flex items-center justify-center w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-indigo-500 transition"
               >
                 <div class="text-center">
-                  <i class="fas fa-cloud-upload-alt text-3xl text-gray-400 mb-2"></i>
+                  <i
+                    class="fas fa-cloud-upload-alt text-3xl text-gray-400 mb-2"
+                  ></i>
                   <p class="text-sm text-gray-600">
-                    <span class="text-indigo-600 font-semibold">Klik untuk upload</span> atau drag & drop
+                    <span class="text-indigo-600 font-semibold"
+                      >Klik untuk upload</span
+                    >
+                    atau drag & drop
                   </p>
                   <p class="text-xs text-gray-500 mt-1">PDF (Max 5MB)</p>
                 </div>
@@ -123,7 +131,10 @@
         <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
           <div class="flex justify-between items-center mb-3">
             <span class="text-sm font-semibold text-gray-700">Progres</span>
-            <span class="text-sm font-semibold text-indigo-600" id="progress-text">
+            <span
+              class="text-sm font-semibold text-indigo-600"
+              id="progress-text"
+            >
               Pertanyaan 1 dari 4
             </span>
           </div>
@@ -143,7 +154,9 @@
             <h2 class="text-2xl font-bold text-white mb-4" id="question-title">
               Pertanyaan 1
             </h2>
-            <div class="relative bg-black rounded-xl overflow-hidden shadow-2xl">
+            <div
+              class="relative bg-black rounded-xl overflow-hidden shadow-2xl"
+            >
               <video id="question-video" class="w-full" controls>
                 <source src="" type="video/mp4" />
                 Browser Anda tidak mendukung video.
@@ -170,8 +183,12 @@
                 </button>
 
                 <div id="recording-status" class="hidden">
-                  <div class="flex items-center gap-3 text-red-600 font-semibold">
-                    <div class="w-4 h-4 bg-red-600 rounded-full animate-pulse"></div>
+                  <div
+                    class="flex items-center gap-3 text-red-600 font-semibold"
+                  >
+                    <div
+                      class="w-4 h-4 bg-red-600 rounded-full animate-pulse"
+                    ></div>
                     <span>Sedang Merekam Video...</span>
                     <span id="record-timer">00:00</span>
                   </div>
@@ -199,7 +216,11 @@
               <!-- Video Preview -->
               <div id="video-preview" class="hidden mb-6">
                 <p class="text-sm text-gray-600 mb-2">Preview Video:</p>
-                <video id="preview-video" controls class="w-full rounded-lg border border-gray-200"></video>
+                <video
+                  id="preview-video"
+                  controls
+                  class="w-full rounded-lg border border-gray-200"
+                ></video>
               </div>
 
               <!-- Transcript -->
@@ -247,13 +268,15 @@
         <i class="fas fa-check-circle text-7xl text-green-500 mb-4"></i>
         <h2 class="text-3xl font-bold text-gray-800 mb-2">Selamat! 🎉</h2>
         <p class="text-gray-600 text-lg mb-6">
-          Anda telah menyelesaikan semua wawancara HRD. Nantikan kabar berikutnya.
+          Anda telah menyelesaikan semua wawancara HRD. Nantikan kabar
+          berikutnya.
         </p>
       </div>
     </div>
 
     <script>
       // Konfigurasi Video
+      const API_URL = "http://localhost:5000";
       const questions = [
         {
           title: "Pertanyaan 1: Perkenalkan Diri Anda",
@@ -293,7 +316,7 @@
       const candidateForm = document.getElementById("candidate-form");
       const cvInput = document.getElementById("candidate-cv");
       const cvFilename = document.getElementById("cv-filename");
-      
+
       const video = document.getElementById("question-video");
       const recordBtn = document.getElementById("record-btn");
       const stopBtn = document.getElementById("stop-btn");
@@ -327,12 +350,12 @@
       // Form Submission
       candidateForm.addEventListener("submit", async (e) => {
         e.preventDefault();
-        
+
         candidateData = {
           name: document.getElementById("candidate-name").value,
           email: document.getElementById("candidate-email").value,
           position: document.getElementById("candidate-position").value,
-          cv_file: cvInput.files[0]
+          cv_file: cvInput.files[0],
         };
 
         // Upload CV first
@@ -344,16 +367,16 @@
         formData.append("position", candidateData.position);
 
         try {
-          const response = await fetch("http://127.0.0.1:5000/upload-cv", {
+          const response = await fetch(`${API_URL}/upload-cv`, {
             method: "POST",
             body: formData,
           });
 
           const result = await response.json();
-          
+
           if (result.success) {
             candidateData.cv_filename = result.cv_filename;
-            
+
             // Hide form, show interview
             registrationForm.classList.add("hidden");
             interviewSection.classList.remove("hidden");
@@ -472,7 +495,10 @@
           audioRecorder.stopRecording(() => resolve(audioRecorder.getBlob()));
         });
 
-        const [videoBlob, audioBlob] = await Promise.all([stopVideo, stopAudio]);
+        const [videoBlob, audioBlob] = await Promise.all([
+          stopVideo,
+          stopAudio,
+        ]);
 
         recordedVideoBlob = videoBlob;
         recordedAudioBlob = audioBlob;
@@ -509,7 +535,9 @@
       // Update timer
       function updateTimer() {
         const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
-        const mins = Math.floor(elapsed / 60).toString().padStart(2, "0");
+        const mins = Math.floor(elapsed / 60)
+          .toString()
+          .padStart(2, "0");
         const secs = (elapsed % 60).toString().padStart(2, "0");
         document.getElementById("record-timer").textContent = `${mins}:${secs}`;
       }
@@ -538,7 +566,7 @@
         formData.append("session_id", sessionId);
 
         try {
-          const response = await fetch("http://127.0.0.1:5000/transcribe", {
+          const response = await fetch(`${API_URL}/transcribe`, {
             method: "POST",
             body: formData,
           });
@@ -549,7 +577,10 @@
             transcriptText.textContent = result.transcript;
             transcriptSection.classList.remove("hidden");
 
-            if (result.is_last_question && result.webhook_status === "success") {
+            if (
+              result.is_last_question &&
+              result.webhook_status === "success"
+            ) {
               const successMsg = document.createElement("div");
               successMsg.className =
                 "bg-green-100 border-2 border-green-500 text-green-700 px-4 py-3 rounded-lg mt-4";
@@ -583,7 +614,7 @@
       // Reset session and reload
       async function resetAndReload() {
         try {
-          await fetch("http://127.0.0.1:5000/reset-session", {
+          await fetch(`${API_URL}/reset-session`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ session_id: sessionId }),
