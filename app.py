@@ -8,6 +8,9 @@ import json
 import base64
 import PyPDF2
 from process_video import analyze_video_confidence
+import re
+from typing import List, Dict
+import pandas as pd
 
 app = Flask(__name__)
 CORS(app)
@@ -15,9 +18,11 @@ CORS(app)
 OUTPUT_DIR = "recordings"
 VIDEO_OUTPUT_DIR = "video_recordings"
 CV_DIR = "cv_uploads"
+TRANSKRIP_DIR = "transkrip_uploads"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(VIDEO_OUTPUT_DIR, exist_ok=True)
 os.makedirs(CV_DIR, exist_ok=True)
+os.makedirs(TRANSKRIP_DIR, exist_ok=True)
 
 WEBHOOK_URL = "https://n8n-1.saturn.petra.ac.id/webhook/939b69b4-4d28-4531-b451-804809c2399c"
 # WEBHOOK_URL = "https://n8n-1.saturn.petra.ac.id/webhook-test/939b69b4-4d28-4531-b451-804809c2399c"
@@ -42,6 +47,136 @@ def extract_text_from_pdf(pdf_path):
     except Exception as e:
         print(f"Error extract PDF: {str(e)}")
         return None
+
+
+def parse_student_info(text: str) -> Dict[str, str]:
+    """Ekstrak informasi mahasiswa dari transkrip"""
+    info = {}
+
+    # Ekstrak nama
+    nama_match = re.search(r'Nama\s*:([A-Z\s]+?)(?:Fakultas|NRP)', text)
+    if nama_match:
+        info['Nama'] = nama_match.group(1).strip()
+
+    # Ekstrak NRP
+    nrp_match = re.search(r'NRP\s*:([A-Z0-9]+)', text)
+    if nrp_match:
+        info['NRP'] = nrp_match.group(1).strip()
+
+    # Ekstrak Program Studi
+    prodi_match = re.search(r'Program Studi\s*:([A-Z\s]+?)(?:Tempat|Program)', text)
+    if prodi_match:
+        info['Program_Studi'] = prodi_match.group(1).strip()
+
+    # Ekstrak IPK
+    ipk_match = re.search(r'Indeks Prestasi Kumulatif\s*:\s*([0-9.]+)', text)
+    if ipk_match:
+        info['IPK'] = float(ipk_match.group(1))
+
+    # Ekstrak Total SKS
+    sks_match = re.search(r'Jumlah SKS\s*:\s*([0-9]+)\s*SKS', text)
+    if sks_match:
+        info['Total_SKS'] = int(sks_match.group(1))
+
+    return info
+
+
+def parse_courses(text: str) -> List[Dict[str, str]]:
+    """Ekstrak data mata kuliah dari transkrip"""
+    courses = []
+    seen_courses = set()
+
+    # Cari semua kemunculan kode mata kuliah dan posisinya
+    pattern_kode = r'([A-Z]{2}\d{4})(?=[A-Z\s])'
+    matches = list(re.finditer(pattern_kode, text))
+
+    for i, match in enumerate(matches):
+        kode = match.group(1)
+
+        # Ambil text mulai dari kode ini sampai kode berikutnya
+        start_pos = match.end()
+        if i < len(matches) - 1:
+            end_pos = matches[i + 1].start()
+        else:
+            end_pos = len(text)
+
+        fragment = text[start_pos:end_pos]
+        fragment_clean = re.sub(r'\s+', ' ', fragment).strip()
+
+        if len(fragment_clean) < 10:
+            continue
+
+        # Cari semester, SKS, dan nilai
+        pattern_data = r'(\d-\d{2}/\d{2})\s*(\d+)\s*([A-E]\+?)'
+        data_match = re.search(pattern_data, fragment_clean)
+
+        if not data_match:
+            continue
+
+        semester = data_match.group(1)
+        sks = int(data_match.group(2))
+        nilai = data_match.group(3)
+
+        # Nama mata kuliah adalah text sebelum semester
+        nama_end_pos = data_match.start()
+        mata_kuliah = fragment_clean[:nama_end_pos].strip()
+        mata_kuliah = re.sub(r'\s+', ' ', mata_kuliah)
+        mata_kuliah = re.sub(r'\s*/\s*$', '', mata_kuliah).strip()
+
+        # Filter noise
+        if (len(mata_kuliah) < 5 or
+            'Kode' in mata_kuliah or
+            'Mata Kuliah' in mata_kuliah or
+            'SMT' in mata_kuliah):
+            continue
+
+        course_id = f"{kode}-{semester}"
+        if course_id in seen_courses:
+            continue
+
+        courses.append({
+            'Kode': kode,
+            'Mata_Kuliah': mata_kuliah,
+            'Semester': semester,
+            'SKS': sks,
+            'Nilai': nilai
+        })
+        seen_courses.add(course_id)
+
+    return courses
+
+
+def calculate_grade_point(grade: str) -> float:
+    """Konversi nilai huruf ke bobot nilai"""
+    grade_mapping = {
+        'A': 4.00, 'B+': 3.50, 'B': 3.00,
+        'C+': 2.50, 'C': 2.00, 'D': 1.00, 'E': 0.00
+    }
+    return grade_mapping.get(grade, 0.0)
+
+
+def analyze_transcript(courses: List[Dict[str, str]]) -> Dict:
+    """Analisis data transkrip"""
+    analysis = {
+        'total_courses': len(courses),
+        'grade_distribution': {},
+        'total_sks': 0,
+        'weighted_sum': 0.0
+    }
+
+    for course in courses:
+        grade = course['Nilai']
+        analysis['grade_distribution'][grade] = analysis['grade_distribution'].get(grade, 0) + 1
+
+        sks = course['SKS']
+        grade_point = calculate_grade_point(grade)
+        analysis['total_sks'] += sks
+        analysis['weighted_sum'] += sks * grade_point
+
+    if analysis['total_sks'] > 0:
+        analysis['calculated_ipk'] = round(analysis['weighted_sum'] / analysis['total_sks'], 2)
+
+    return analysis
 
 
 def transform_n8n_data_to_candidate(user_data):
@@ -284,6 +419,73 @@ def upload_cv():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/upload-transkrip', methods=['POST'])
+def upload_transkrip():
+    try:
+        if 'transkrip' not in request.files:
+            return jsonify({'error': 'Tidak ada file transkrip'}), 400
+
+        transkrip_file = request.files['transkrip']
+        session_id = request.form.get('session_id', 'default')
+
+        # Validasi file PDF
+        if not transkrip_file.filename.endswith('.pdf'):
+            return jsonify({'error': 'File transkrip harus berformat PDF'}), 400
+
+        # Simpan transkrip
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        transkrip_filename = f"Transkrip_{session_id}_{timestamp}.pdf"
+        transkrip_path = os.path.join(TRANSKRIP_DIR, transkrip_filename)
+        transkrip_file.save(transkrip_path)
+
+        # Extract dan parse transkrip
+        transkrip_text = extract_text_from_pdf(transkrip_path)
+
+        if not transkrip_text:
+            return jsonify({'error': 'Gagal membaca file transkrip'}), 400
+
+        # Parse informasi mahasiswa
+        student_info = parse_student_info(transkrip_text)
+
+        # Parse mata kuliah
+        courses = parse_courses(transkrip_text)
+
+        # Analisis transkrip
+        analysis = analyze_transcript(courses)
+
+        # Update candidate_info dengan data transkrip
+        if session_id not in candidate_info:
+            candidate_info[session_id] = {}
+
+        candidate_info[session_id].update({
+            "transkrip_filename": transkrip_filename,
+            "transkrip_path": transkrip_path,
+            "transkrip_nrp": student_info.get('NRP', ''),
+            "transkrip_prodi": student_info.get('Program_Studi', ''),
+            "transkrip_ipk": student_info.get('IPK', analysis.get('calculated_ipk', 0)),
+            "transkrip_total_sks": student_info.get('Total_SKS', analysis.get('total_sks', 0)),
+            "transkrip_total_mk": analysis.get('total_courses', 0),
+            "transkrip_courses": courses,  # Simpan list mata kuliah
+            "transkrip_analysis": analysis  # Simpan analisis lengkap
+        })
+
+        return jsonify({
+            'success': True,
+            'transkrip_filename': transkrip_filename,
+            'student_info': student_info,
+            'analysis': {
+                'total_courses': analysis.get('total_courses', 0),
+                'total_sks': analysis.get('total_sks', 0),
+                'ipk': analysis.get('calculated_ipk', 0),
+                'grade_distribution': analysis.get('grade_distribution', {})
+            }
+        })
+
+    except Exception as e:
+        print(f"Error upload transkrip: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/transcribe', methods=['POST'])
 def transcribe_audio():
     try:
@@ -368,14 +570,23 @@ def transcribe_audio():
                     "nama": candidate.get("nama", ""),
                     "email": candidate.get("email", ""),
                     "posisi_dilamar": candidate.get("posisi_dilamar", ""),
-                    
+
                     "cv_text": candidate.get("CV", ""),
-                    
+
                     # Transkrip Pertanyaan 1-4
                     "transkrip_pertanyaan_1": all_transcripts[session_id].get("pertanyaan_1", {}).get("transkrip", ""),
                     "transkrip_pertanyaan_2": all_transcripts[session_id].get("pertanyaan_2", {}).get("transkrip", ""),
                     "transkrip_pertanyaan_3": all_transcripts[session_id].get("pertanyaan_3", {}).get("transkrip", ""),
                     "transkrip_pertanyaan_4": all_transcripts[session_id].get("pertanyaan_4", {}).get("transkrip", ""),
+
+                    # Data Transkrip Akademik
+                    "transkrip_nrp": candidate.get("transkrip_nrp", ""),
+                    "transkrip_prodi": candidate.get("transkrip_prodi", ""),
+                    "transkrip_ipk": candidate.get("transkrip_ipk", 0),
+                    "transkrip_total_sks": candidate.get("transkrip_total_sks", 0),
+                    "transkrip_total_mk": candidate.get("transkrip_total_mk", 0),
+                    "transkrip_courses": candidate.get("transkrip_courses", []),
+                    "transkrip_grade_distribution": candidate.get("transkrip_analysis", {}).get("grade_distribution", {})
                 }
 
                 if video_analysis_payload:

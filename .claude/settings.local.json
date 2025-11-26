@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip show:*)",
+      "Bash(python transkrip_extract.py:*)",
+      "Bash(dir \"C:\\Users\\Charles\\Downloads\\Interview-App\\outputs\")",
+      "Bash(python:*)",
+      "Bash(del /Q \"C:\\Users\\Charles\\Downloads\\Interview-App\\outputs\\*.csv\")",
+      "Bash(del /Q \"C:\\Users\\Charles\\Downloads\\Interview-App\\outputs\\*.xlsx\")",
+      "Bash(pip install:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
