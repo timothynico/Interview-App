@@ -11,6 +11,7 @@ from process_video import analyze_video_confidence
 import re
 from typing import List, Dict
 import pandas as pd
+from scrap_website import scrape_skkk_data
 
 app = Flask(__name__)
 CORS(app)
@@ -24,8 +25,7 @@ os.makedirs(VIDEO_OUTPUT_DIR, exist_ok=True)
 os.makedirs(CV_DIR, exist_ok=True)
 os.makedirs(TRANSKRIP_DIR, exist_ok=True)
 
-WEBHOOK_URL = "https://n8n-1.saturn.petra.ac.id/webhook/939b69b4-4d28-4531-b451-804809c2399c"
-# WEBHOOK_URL = "https://n8n-1.saturn.petra.ac.id/webhook-test/939b69b4-4d28-4531-b451-804809c2399c"
+WEBHOOK_URL = "https://n8n-1.saturn.petra.ac.id/webhook-test/939b69b4-4d28-4531-b451-804809c2399c"
 DASHBOARD_DATA_URL = "https://n8n-1.saturn.petra.ac.id/webhook/d14704c6-0264-43d4-a978-e17cccf06e45"
 
 # Menyimpan semua hasil transkripsi dan data kandidat
@@ -453,7 +453,18 @@ def upload_transkrip():
         # Analisis transkrip
         analysis = analyze_transcript(courses)
 
-        # Update candidate_info dengan data transkrip
+        # Scrape SKKK berdasarkan NRP dari transkrip
+        skkk_result = {"success": False, "data": [], "total_activities": 0}
+        nrp = student_info.get('NRP', '')
+        if nrp:
+            print(f"📡 Scraping SKKK untuk NRP: {nrp}")
+            skkk_result = scrape_skkk_data(nrp)
+            if skkk_result["success"]:
+                print(f"✅ SKKK berhasil di-scrape: {skkk_result['total_activities']} kegiatan")
+            else:
+                print(f"⚠️ SKKK scraping gagal: {skkk_result.get('error', 'Unknown error')}")
+
+        # Update candidate_info dengan data transkrip dan SKKK
         if session_id not in candidate_info:
             candidate_info[session_id] = {}
 
@@ -466,8 +477,14 @@ def upload_transkrip():
             "transkrip_total_sks": student_info.get('Total_SKS', analysis.get('total_sks', 0)),
             "transkrip_total_mk": analysis.get('total_courses', 0),
             "transkrip_courses": courses,  # Simpan list mata kuliah
-            "transkrip_analysis": analysis  # Simpan analisis lengkap
+            "transkrip_analysis": analysis,  # Simpan analisis lengkap
+            "skkk_data": skkk_result.get('data', []),  # Data SKKK
+            "skkk_total_activities": skkk_result.get('total_activities', 0),  # Total kegiatan SKKK
+            "skkk_success": skkk_result.get('success', False)  # Status scraping SKKK
         })
+
+        # NOTE: Webhook hanya dikirim saat interview selesai (pertanyaan ke-4)
+        # Tidak kirim saat upload transkrip untuk menjaga konsistensi dengan flow sebelumnya
 
         return jsonify({
             'success': True,
@@ -478,6 +495,12 @@ def upload_transkrip():
                 'total_sks': analysis.get('total_sks', 0),
                 'ipk': analysis.get('calculated_ipk', 0),
                 'grade_distribution': analysis.get('grade_distribution', {})
+            },
+            'skkk': {
+                'success': skkk_result.get('success', False),
+                'total_activities': skkk_result.get('total_activities', 0),
+                'data': skkk_result.get('data', []),
+                'error': skkk_result.get('error', None)
             }
         })
 
@@ -561,7 +584,7 @@ def transcribe_audio():
                         analysis_text = f"Error analisis video: {str(analysis_error)}"
                     video_analysis_payload[f"analisis_{key}"] = analysis_text
 
-                # 🔹 Struktur payload dengan CV TEXT (bukan file)
+                # Struktur payload - JANGAN UBAH STRUKTUR YANG SUDAH ADA!
                 payload = {
                     "session_id": session_id,
                     "timestamp_completed": datetime.now().isoformat(),
@@ -571,6 +594,7 @@ def transcribe_audio():
                     "email": candidate.get("email", ""),
                     "posisi_dilamar": candidate.get("posisi_dilamar", ""),
 
+                    # CV Text
                     "cv_text": candidate.get("CV", ""),
 
                     # Transkrip Pertanyaan 1-4
@@ -579,14 +603,19 @@ def transcribe_audio():
                     "transkrip_pertanyaan_3": all_transcripts[session_id].get("pertanyaan_3", {}).get("transkrip", ""),
                     "transkrip_pertanyaan_4": all_transcripts[session_id].get("pertanyaan_4", {}).get("transkrip", ""),
 
-                    # Data Transkrip Akademik
+                    # Data Transkrip Akademik (TAMBAHAN BARU)
                     "transkrip_nrp": candidate.get("transkrip_nrp", ""),
                     "transkrip_prodi": candidate.get("transkrip_prodi", ""),
                     "transkrip_ipk": candidate.get("transkrip_ipk", 0),
                     "transkrip_total_sks": candidate.get("transkrip_total_sks", 0),
                     "transkrip_total_mk": candidate.get("transkrip_total_mk", 0),
                     "transkrip_courses": candidate.get("transkrip_courses", []),
-                    "transkrip_grade_distribution": candidate.get("transkrip_analysis", {}).get("grade_distribution", {})
+                    "transkrip_grade_distribution": candidate.get("transkrip_analysis", {}).get("grade_distribution", {}),
+
+                    # Data SKKK - Satuan Kredit Kegiatan Kemahasiswaan (TAMBAHAN BARU)
+                    "skkk_data": candidate.get("skkk_data", []),
+                    "skkk_total_activities": candidate.get("skkk_total_activities", 0),
+                    "skkk_success": candidate.get("skkk_success", False)
                 }
 
                 if video_analysis_payload:
