@@ -245,6 +245,30 @@
         height: 60vh;
       }
 
+      .chat-tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+
+      .chat-tab {
+        padding: 10px 16px;
+        border-radius: 20px;
+        border: 2px solid transparent;
+        background: #f1f3f5;
+        color: #555;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .chat-tab.active {
+        background: #667eea;
+        color: #fff;
+        border-color: #5568d3;
+        box-shadow: 0 6px 16px rgba(102, 126, 234, 0.35);
+      }
+
       .chat-messages {
         flex: 1;
         overflow-y: auto;
@@ -443,7 +467,7 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>🤖 Chat dengan AI</h2>
-          <span class="close" onclick="closeModal('chatModal')">&times;</span>
+          <span class="close" onclicRk="closeModal('chatModal')">&times;</span>
         </div>
         <div class="modal-body">
           <h3
@@ -451,14 +475,8 @@
             style="margin-bottom: 20px; color: #667eea"
           ></h3>
           <div class="chat-container">
-            <div class="chat-messages" id="chatMessages">
-              <div class="message ai">
-                <div class="message-content">
-                  Halo! Saya AI assistant. Saya siap membantu Anda menganalisis
-                  kandidat ini. Apa yang ingin Anda ketahui?
-                </div>
-              </div>
-            </div>
+            <div class="chat-tabs" id="chatTabs"></div>
+            <div class="chat-messages" id="chatMessages"></div>
             <div class="chat-input-container">
               <input
                 type="text"
@@ -478,6 +496,21 @@
       let currentSessionId = null;
       let cur_user_id = null;
       let allCandidates = [];
+      const chatCandidates = {};
+      const CHAT_ENDPOINTS = {
+        interview: `${API_BASE_URL}/api/chat/interview`,
+        transkrip: `${API_BASE_URL}/api/chat/transkrip`,
+        skkk: `${API_BASE_URL}/api/chat/skkk`,
+      };
+
+      const CHAT_ROOMS = [
+        { id: "interview", label: "Chat Hasil Interview" },
+        { id: "transkrip", label: "Chat Transkrip" },
+        { id: "skkk", label: "Chat SKKK" },
+      ];
+
+      let activeChatRoom = "interview";
+      const chatHistories = {};
 
       // Pertanyaan interview
       const questions = [
@@ -487,6 +520,101 @@
         "Pertanyaan terakhir, mengapa kami harus menerima anda untuk bergabung di perusahaan kami?",
       ];
 
+      function defaultAiGreeting(roomId, candidateName) {
+        switch (roomId) {
+          case "interview":
+            return `Halo! Saya bisa membantu meninjau jawaban interview ${candidateName}. Apa yang ingin Anda dalami?`;
+          case "transkrip":
+            return `Halo! Saya bisa membantu menganalisis transkrip akademik ${candidateName}. Ada yang ingin Anda tanyakan?`;
+          case "skkk":
+            return `Halo! Saya siap membantu meninjau data SKKK ${candidateName}. Mau mulai dari aktivitas apa?`;
+          default:
+            return `Halo! Saya AI assistant. Saya siap membantu Anda menganalisis kandidat ${candidateName}. Apa yang ingin Anda ketahui?`;
+        }
+      }
+
+      function getRoomLabel(roomId) {
+        const room = CHAT_ROOMS.find((r) => r.id === roomId);
+        return room ? room.label : roomId;
+      }
+
+      function ensureChatSession(sessionId, candidateName) {
+        if (!chatHistories[sessionId]) {
+          chatHistories[sessionId] = {};
+        }
+
+        CHAT_ROOMS.forEach(({ id }) => {
+          if (!chatHistories[sessionId][id]) {
+            chatHistories[sessionId][id] = [
+              { sender: "ai", text: defaultAiGreeting(id, candidateName) },
+            ];
+          }
+        });
+      }
+
+      function renderChatTabs() {
+        const chatTabs = document.getElementById("chatTabs");
+        chatTabs.innerHTML = CHAT_ROOMS.map(
+          ({ id, label }) => `
+              <button class="chat-tab ${id === activeChatRoom ? "active" : ""}" onclick="setActiveChatRoom('${id}')">
+                ${label}
+              </button>
+            `
+        ).join("");
+      }
+
+      function renderChatMessages() {
+        const chatMessages = document.getElementById("chatMessages");
+        const sessionHistory = chatHistories[currentSessionId] || {};
+        const roomHistory = sessionHistory[activeChatRoom] || [];
+
+        chatMessages.innerHTML = roomHistory
+          .map(
+            (entry) => `
+              <div class="message ${entry.sender}">
+                <div class="message-content">${escapeHtml(entry.text)}</div>
+              </div>
+            `
+          )
+          .join("");
+
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+
+      function setActiveChatRoom(roomId) {
+        activeChatRoom = roomId;
+        renderChatTabs();
+        renderChatMessages();
+        updateChatPlaceholder();
+      }
+
+      function updateChatPlaceholder() {
+        const chatInput = document.getElementById("chatInput");
+        if (!chatInput) return;
+        chatInput.placeholder = `Ketik pertanyaan untuk ${getRoomLabel(
+          activeChatRoom
+        )}...`;
+      }
+
+      function addTypingIndicator() {
+        const chatMessages = document.getElementById("chatMessages");
+        const indicator = document.createElement("div");
+        indicator.className = "message ai";
+        indicator.id = "typingIndicator";
+        indicator.innerHTML = `<div class="message-content">AI sedang memproses (${getRoomLabel(
+          activeChatRoom
+        )})...</div>`;
+        chatMessages.appendChild(indicator);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+
+      function removeTypingIndicator() {
+        const typingIndicator = document.getElementById("typingIndicator");
+        if (typingIndicator) {
+          typingIndicator.remove();
+        }
+      }
+
       // Load kandidat dari API
       async function loadCandidates() {
         try {
@@ -495,6 +623,7 @@
 
           if (data.success && data.candidates) {
             allCandidates = data.candidates;
+            console.log('allCandidates', allCandidates);
             renderCandidates(allCandidates);
           } else {
             showEmptyState();
@@ -620,20 +749,26 @@
 
         const candidate = allCandidates.find((c) => c.session_id === sessionId);
         if (!candidate) return;
+        const candidateNRP =
+          candidate.transkrip_nrp ||
+          candidate.nrp ||
+          candidate.NRP ||
+          candidate.transkrip?.nrp ||
+          null;
 
         document.getElementById(
           "chatCandidateName"
         ).textContent = `Chat AI - ${candidate.nama}`;
 
-        // Reset chat messages
-        document.getElementById("chatMessages").innerHTML = `
-                <div class="message ai">
-                    <div class="message-content">
-                        Halo! Saya AI assistant. Saya siap membantu Anda menganalisis kandidat ${candidate.nama}. Apa yang ingin Anda ketahui?
-                    </div>
-                </div>
-            `;
-
+        chatCandidates[sessionId] = {
+          name: candidate.nama,
+          nrp: candidateNRP,
+        };
+        ensureChatSession(sessionId, candidate.nama);
+        activeChatRoom = "interview";
+        renderChatTabs();
+        renderChatMessages();
+        updateChatPlaceholder();
         document.getElementById("chatModal").style.display = "block";
         document.getElementById("chatInput").value = "";
         document.getElementById("chatInput").focus();
@@ -646,30 +781,19 @@
 
         if (!message || !currentSessionId) return;
 
-        // Tambahkan pesan user
-        const chatMessages = document.getElementById("chatMessages");
-        chatMessages.innerHTML += `
-                <div class="message user">
-                    <div class="message-content">${escapeHtml(message)}</div>
-                </div>
-            `;
+        ensureChatSession(currentSessionId, chatCandidates[currentSessionId]);
+        const roomHistory = chatHistories[currentSessionId][activeChatRoom];
+        roomHistory.push({ sender: "user", text: message });
+        renderChatMessages();
 
         input.value = "";
-
-        // Scroll ke bawah
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-
-        // Tampilkan typing indicator
-        chatMessages.innerHTML += `
-                <div class="message ai" id="typingIndicator">
-                    <div class="message-content">AI sedang memproses dengan RAG...</div>
-                </div>
-            `;
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        addTypingIndicator();
 
         try {
+          const endpoint =
+            CHAT_ENDPOINTS[activeChatRoom] || `${API_BASE_URL}/api/chat`;
           // Kirim ke API backend yang akan forward ke n8n untuk RAG processing
-          const response = await fetch(`${API_BASE_URL}/api/chat`, {
+          const response = await fetch(endpoint, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -677,56 +801,39 @@
             body: JSON.stringify({
               session_id: cur_user_id, // Ini akan jadi user_id di n8n
               message: message,
+              chat_room: activeChatRoom,
+              candidate_session: currentSessionId,
+              nrp: chatCandidates[currentSessionId]?.nrp || null,
             }),
           });
 
           console.log(response);
 
           const data = await response.json();
-
-          // Hapus typing indicator
-          const typingIndicator = document.getElementById("typingIndicator");
-          if (typingIndicator) {
-            typingIndicator.remove();
-          }
+          removeTypingIndicator();
 
           // Tambahkan respons AI dari n8n
           if (data.success && data.response) {
-            chatMessages.innerHTML += `
-                        <div class="message ai">
-                            <div class="message-content">${escapeHtml(
-                              data.response
-                            )}</div>
-                        </div>
-                    `;
+            roomHistory.push({ sender: "ai", text: data.response });
           } else {
             // Tampilkan error jika gagal
-            chatMessages.innerHTML += `
-                        <div class="message ai">
-                            <div class="message-content">Maaf, terjadi kesalahan: ${escapeHtml(
-                              data.error || "Unknown error"
-                            )}</div>
-                        </div>
-                    `;
+            roomHistory.push({
+              sender: "ai",
+              text: `Maaf, terjadi kesalahan: ${data.error || "Unknown error"}`,
+            });
           }
         } catch (error) {
           console.error("Error sending message:", error);
-
-          // Hapus typing indicator
-          const typingIndicator = document.getElementById("typingIndicator");
-          if (typingIndicator) {
-            typingIndicator.remove();
-          }
+          removeTypingIndicator();
 
           // Tampilkan error message
-          chatMessages.innerHTML += `
-                    <div class="message ai">
-                        <div class="message-content">Maaf, tidak dapat terhubung ke server. Silakan coba lagi.</div>
-                    </div>
-                `;
+          roomHistory.push({
+            sender: "ai",
+            text: "Maaf, tidak dapat terhubung ke server. Silakan coba lagi.",
+          });
         }
 
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        renderChatMessages();
       }
 
       // Helper function untuk escape HTML

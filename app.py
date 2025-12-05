@@ -182,7 +182,26 @@ def analyze_transcript(courses: List[Dict[str, str]]) -> Dict:
 def transform_n8n_data_to_candidate(user_data):
     """Transform data dari n8n ke format kandidat untuk dashboard"""
     documents = {doc['type']: doc['content'] for doc in user_data.get('documents', [])}
-    
+    session_key = f"session_{user_data.get('user_id')}"
+    fallback_info = candidate_info.get(session_key, {})
+    nrp_value = (
+        user_data.get('transkrip_nrp')
+        or user_data.get('nrp')
+        or user_data.get('NRP')
+        or (user_data.get('transkrip') or {}).get('nrp')
+        or fallback_info.get('transkrip_nrp')
+        or fallback_info.get('nrp')
+    )
+    prodi_value = (
+        user_data.get('transkrip_prodi')
+        or (user_data.get('transkrip') or {}).get('prodi')
+        or fallback_info.get('transkrip_prodi')
+    )
+    ipk_value = (
+        user_data.get('transkrip_ipk')
+        or (user_data.get('transkrip') or {}).get('ipk')
+        or fallback_info.get('transkrip_ipk')
+    )
     return {
         'id': user_data.get('user_id'),
         'session_id': f"session_{user_data.get('user_id')}",
@@ -195,7 +214,11 @@ def transform_n8n_data_to_candidate(user_data):
         'Q1': documents.get('Q1', ''),
         'Q2': documents.get('Q2', ''),
         'Q3': documents.get('Q3', ''),
-        'Q4': documents.get('Q4', '')
+        'Q4': documents.get('Q4', ''),
+        'transkrip_nrp': nrp_value,
+        'nrp': nrp_value,
+        'transkrip_prodi': prodi_value,
+        'transkrip_ipk': ipk_value,
     }
 
 
@@ -313,64 +336,181 @@ def get_candidate_detail(session_id):
         }), 500
 
 
-N8N_CHAT_WEBHOOK = "https://n8n-1.saturn.petra.ac.id/webhook/d14704c6-0264-43d4-a978-e17cccf06e45"  # Ganti dengan webhook n8n Anda
+# Webhook khusus per jenis chat
+N8N_CHAT_WEBHOOK_INTERVIEW = "https://n8n-1.saturn.petra.ac.id/webhook/d14704c6-0264-43d4-a978-e17cccf06e45"
+N8N_CHAT_WEBHOOK_TRANSKRIP = "https://n8n-1.saturn.petra.ac.id/webhook/a722d4da-adb4-42da-992d-4ebd0743de82"  # TODO: ganti ke webhook transkrip
+N8N_CHAT_WEBHOOK_SKKK = "https://n8n-1.saturn.petra.ac.id/webhook/4a491dea-62df-44a6-a458-85b0b97c51bc"  # TODO: ganti ke webhook SKKK
 
+
+def forward_chat(webhook_url: str, session_id: str, message: str, chat_room: str = None,
+                 candidate_session: str = None, nrp: str = None):
+    """Helper untuk meneruskan chat ke webhook n8n sesuai konteks."""
+    payload = {
+        'user_id': session_id,
+        'message': message,
+        'timestamp': datetime.now().isoformat()
+    }
+
+    # sertakan metadata tambahan jika ada
+    if chat_room:
+        payload['chat_room'] = chat_room
+    if candidate_session:
+        payload['candidate_session'] = candidate_session
+    if nrp:
+        payload['nrp'] = nrp
+        payload['transkrip_nrp'] = nrp  # duplicate for clarity if flow expects this key
+
+    response = requests.post(
+        webhook_url,
+        json=payload,
+        headers={'Content-Type': 'application/json'},
+        timeout=30
+    )
+    response.raise_for_status()
+    try:
+        response_data = response.json()
+    except ValueError:
+        # Fallback jika response bukan JSON
+        response_data = {"output": response.text.strip() or ""}
+    ai_message = response_data.get('output', '')
+    if isinstance(ai_message, dict):
+        ai_message = json.dumps(ai_message, ensure_ascii=False)
+    return ai_message
+@app.route('/api/chat/interview', methods=['POST'])
+def chat_interview():
+    """Chat konteks hasil interview."""
+    try:
+        data = request.get_json()
+        session_id = data.get('session_id')
+        message = data.get('message')
+        if not session_id or not message:
+            return jsonify({'success': False, 'error': 'session_id dan message required'}), 400
+
+        ai_message = forward_chat(
+            webhook_url=N8N_CHAT_WEBHOOK_INTERVIEW,
+            session_id=session_id,
+            message=message,
+            chat_room='interview',
+            candidate_session=data.get('candidate_session'),
+            nrp=data.get('nrp')
+        )
+        return jsonify({'success': True, 'response': ai_message})
+
+    except requests.Timeout:
+        return jsonify({'success': False, 'error': 'Request timeout - AI membutuhkan waktu terlalu lama'}), 504
+    except requests.RequestException as e:
+        print(f"Error calling n8n (interview): {str(e)}")
+        return jsonify({'success': False, 'error': f'Error connecting to AI: {str(e)}'}), 500
+    except Exception as e:
+        print(f"Error chat interview: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/chat/transkrip', methods=['POST'])
+def chat_transkrip():
+    """Chat konteks transkrip akademik."""
+    try:
+        data = request.get_json()
+        session_id = data.get('session_id')
+        message = data.get('message')
+        nrp = data.get('nrp')
+        if not session_id or not message:
+            return jsonify({'success': False, 'error': 'session_id dan message required'}), 400
+
+        # fallback nrp dari cache kandidat jika ada
+        if not nrp and session_id in candidate_info:
+            nrp = candidate_info[session_id].get('nrp') or candidate_info[session_id].get('nrp')
+        if not nrp and data.get('candidate_session') in candidate_info:
+            cand = candidate_info[data.get('candidate_session')]
+            nrp = cand.get('nrp') or cand.get('nrp')
+
+        print('Using NRP for transkrip chat:', nrp)
+        
+        ai_message = forward_chat(
+            webhook_url=N8N_CHAT_WEBHOOK_TRANSKRIP,
+            session_id=session_id,  # gunakan NRP jika tersedia
+            message=message,
+            chat_room='transkrip',
+            candidate_session=data.get('candidate_session'),
+            nrp=nrp
+        )
+        return jsonify({'success': True, 'response': ai_message})
+
+    except requests.Timeout:
+        return jsonify({'success': False, 'error': 'Request timeout - AI membutuhkan waktu terlalu lama'}), 504
+    except requests.RequestException as e:
+        print(f"Error calling n8n (transkrip): {str(e)}")
+        return jsonify({'success': False, 'error': f'Error connecting to AI: {str(e)}'}), 500
+    except Exception as e:
+        print(f"Error chat transkrip: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/chat/skkk', methods=['POST'])
+def chat_skkk():
+    """Chat konteks SKKK."""
+    try:
+        data = request.get_json()
+        session_id = data.get('session_id')
+        message = data.get('message')
+        nrp = data.get('nrp')
+        if not session_id or not message:
+            return jsonify({'success': False, 'error': 'session_id dan message required'}), 400
+
+        # fallback nrp dari cache kandidat jika ada
+        if not nrp and session_id in candidate_info:
+            nrp = candidate_info[session_id].get('transkrip_nrp') or candidate_info[session_id].get('nrp')
+        if not nrp and data.get('candidate_session') in candidate_info:
+            cand = candidate_info[data.get('candidate_session')]
+            nrp = cand.get('transkrip_nrp') or cand.get('nrp')
+
+        ai_message = forward_chat(
+            webhook_url=N8N_CHAT_WEBHOOK_SKKK,
+            session_id=nrp or session_id,  # gunakan NRP jika tersedia
+            message=message,
+            chat_room='skkk',
+            candidate_session=data.get('candidate_session'),
+            nrp=nrp
+        )
+        return jsonify({'success': True, 'response': ai_message})
+
+    except requests.Timeout:
+        return jsonify({'success': False, 'error': 'Request timeout - AI membutuhkan waktu terlalu lama'}), 504
+    except requests.RequestException as e:
+        print(f"Error calling n8n (skkk): {str(e)}")
+        return jsonify({'success': False, 'error': f'Error connecting to AI: {str(e)}'}), 500
+    except Exception as e:
+        print(f"Error chat skkk: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# Backward compatibility: route lama tetap diarahkan ke interview
 @app.route('/api/chat', methods=['POST'])
 def chat_with_ai():
     try:
         data = request.get_json()
         session_id = data.get('session_id')
         message = data.get('message')
-        
         if not session_id or not message:
-            return jsonify({
-                'success': False,
-                'error': 'session_id dan message required'
-            }), 400
-        
-        payload = {
-            'user_id': session_id, 
-            'message': message,
-            'timestamp': datetime.now().isoformat()
-        }
-        
-        response = requests.post(
-            N8N_CHAT_WEBHOOK,
-            json=payload,
-            headers={'Content-Type': 'application/json'},
-            timeout=30
+            return jsonify({'success': False, 'error': 'session_id dan message required'}), 400
+
+        ai_message = forward_chat(
+            webhook_url=N8N_CHAT_WEBHOOK_INTERVIEW,
+            session_id=session_id,
+            message=message,
+            chat_room=data.get('chat_room'),
+            candidate_session=data.get('candidate_session'),
+            nrp=data.get('nrp')
         )
-        
-        response.raise_for_status()
-        response_data = response.json()
-        
-        ai_message = response_data.get('output', '')
-        
-        if isinstance(ai_message, dict):
-            ai_message = json.dumps(ai_message, ensure_ascii=False)
-        
-        return jsonify({
-            'success': True,
-            'response': ai_message
-        })
-            
+        return jsonify({'success': True, 'response': ai_message})
+
     except requests.Timeout:
-        return jsonify({
-            'success': False,
-            'error': 'Request timeout - AI membutuhkan waktu terlalu lama'
-        }), 504
+        return jsonify({'success': False, 'error': 'Request timeout - AI membutuhkan waktu terlalu lama'}), 504
     except requests.RequestException as e:
         print(f"Error calling n8n: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': f'Error connecting to AI: {str(e)}'
-        }), 500
+        return jsonify({'success': False, 'error': f'Error connecting to AI: {str(e)}'}), 500
     except Exception as e:
         print(f"Error chat with AI: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/upload-cv', methods=['POST'])
 def upload_cv():
