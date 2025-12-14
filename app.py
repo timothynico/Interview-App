@@ -540,7 +540,11 @@ def upload_cv():
         print('cv_text', cv_text)
 
         # Simpan info kandidat dengan struktur yang match database
-        candidate_info[session_id] = {
+        # Gunakan update agar data transkrip/SKKK yang sudah di-upload sebelumnya tidak hilang
+        if session_id not in candidate_info:
+            candidate_info[session_id] = {}
+
+        candidate_info[session_id].update({
             "nama": name,
             "email": email,
             "posisi_dilamar": position,
@@ -548,7 +552,7 @@ def upload_cv():
             "cv_path": cv_path,
             "CV": cv_text,  # Sesuai dengan kolom di database
             "registered_at": datetime.now().isoformat()
-        }
+        })
 
         return jsonify({
             'success': True,
