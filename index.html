@@ -306,14 +306,42 @@
       <!-- Completion Screen -->
       <div
         id="completion-screen"
-        class="hidden bg-white rounded-2xl shadow-xl p-8 text-center"
+        class="hidden bg-white rounded-2xl shadow-xl p-8"
       >
-        <i class="fas fa-check-circle text-7xl text-green-500 mb-4"></i>
-        <h2 class="text-3xl font-bold text-gray-800 mb-2">Selamat! 🎉</h2>
-        <p class="text-gray-600 text-lg mb-6">
-          Anda telah menyelesaikan semua wawancara HRD. Nantikan kabar
-          berikutnya.
-        </p>
+        <div class="text-center mb-6">
+          <i class="fas fa-chart-line text-7xl text-indigo-600 mb-4"></i>
+          <h2 class="text-3xl font-bold text-gray-800 mb-2">
+            Hasil Analisis Interview
+          </h2>
+          <p class="text-gray-600 text-lg">
+            Berikut rangkuman penilaian otomatis untuk jawaban dan ekspresi
+            Anda.
+          </p>
+        </div>
+
+        <div id="analysis-summary" class="space-y-6">
+          <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-5">
+            <div class="flex items-center gap-3 mb-3">
+              <div class="bg-indigo-600 text-white rounded-full p-3">
+                <i class="fas fa-star text-xl"></i>
+              </div>
+              <div>
+                <p class="text-sm text-indigo-700 font-semibold">Skor Akhir</p>
+                <p id="final-score" class="text-3xl font-bold text-indigo-800">
+                  -
+                </p>
+              </div>
+            </div>
+            <p class="text-sm text-indigo-700">
+              Skor dihitung berdasarkan kualitas jawaban dan analisis
+              komunikasi non-verbal dari keempat video.
+            </p>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-4" id="scores-grid"></div>
+
+          <div class="space-y-4" id="analysis-details"></div>
+        </div>
       </div>
     </div>
 
@@ -377,6 +405,9 @@
       const recordingSection = document.getElementById("recording-section");
       const videoInstruction = document.getElementById("video-instruction");
       const completionScreen = document.getElementById("completion-screen");
+      const analysisDetails = document.getElementById("analysis-details");
+      const scoresGrid = document.getElementById("scores-grid");
+      const finalScore = document.getElementById("final-score");
 
       // CV Upload Handler
       cvInput.addEventListener("change", (e) => {
@@ -685,12 +716,9 @@
               result.is_last_question &&
               result.webhook_status === "success"
             ) {
-              const successMsg = document.createElement("div");
-              successMsg.className =
-                "bg-green-100 border-2 border-green-500 text-green-700 px-4 py-3 rounded-lg mt-4";
-              successMsg.innerHTML =
-                '<i class="fas fa-check-circle mr-2"></i><strong>Berhasil!</strong> Semua data telah dikirim ke webhook.';
-              transcriptSection.appendChild(successMsg);
+              currentQuestion++;
+              showCompletion(result.webhook_result);
+              return;
             }
 
             setTimeout(() => {
@@ -710,9 +738,82 @@
       });
 
       // Show completion
-      function showCompletion() {
+      function showCompletion(webhookResult) {
         interviewSection.classList.add("hidden");
         completionScreen.classList.remove("hidden");
+
+        // Reset konten sebelumnya
+        analysisDetails.innerHTML = "";
+        scoresGrid.innerHTML = "";
+        finalScore.textContent = "-";
+
+        if (!webhookResult) {
+          const emptyState = document.createElement("div");
+          emptyState.className =
+            "bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-xl p-4";
+          emptyState.innerHTML =
+            "<strong>Catatan:</strong> Hasil analisis belum tersedia dari webhook.";
+          analysisDetails.appendChild(emptyState);
+          return;
+        }
+
+        // Tampilkan skor akhir
+        if (webhookResult.skor_final !== undefined) {
+          finalScore.textContent = webhookResult.skor_final;
+        }
+
+        const scoreMapping = [
+          { key: "skor1", label: "Skor Jawaban 1" },
+          { key: "skor2", label: "Skor Jawaban 2" },
+          { key: "skor3", label: "Skor Jawaban 3" },
+          { key: "skor4", label: "Skor Jawaban 4" },
+        ];
+
+        scoreMapping.forEach((item) => {
+          const value = webhookResult[item.key];
+          if (value === undefined) return;
+
+          const card = document.createElement("div");
+          card.className =
+            "border border-gray-200 rounded-xl p-4 flex items-center gap-3";
+          card.innerHTML = `
+            <div class="bg-indigo-100 text-indigo-700 rounded-full h-12 w-12 flex items-center justify-center font-bold">
+              ${item.key.replace("skor", "Q")}
+            </div>
+            <div>
+              <p class="text-sm text-gray-500">${item.label}</p>
+              <p class="text-2xl font-bold text-gray-800">${value}</p>
+            </div>
+          `;
+          scoresGrid.appendChild(card);
+        });
+
+        const analysisMapping = [
+          { key: "analisis_jawaban1", title: "Analisis Jawaban 1" },
+          { key: "analisis_jawaban2", title: "Analisis Jawaban 2" },
+          { key: "analisis_jawaban3", title: "Analisis Jawaban 3" },
+          { key: "analisis_jawaban4", title: "Analisis Jawaban 4" },
+          { key: "analisis_video1", title: "Analisis Video 1" },
+          { key: "analisis_video2", title: "Analisis Video 2" },
+          { key: "analisis_video3", title: "Analisis Video 3" },
+          { key: "analisis_video4", title: "Analisis Video 4" },
+        ];
+
+        analysisMapping.forEach((item) => {
+          const text = webhookResult[item.key];
+          if (!text) return;
+
+          const card = document.createElement("div");
+          card.className = "border border-gray-200 rounded-xl p-5";
+          card.innerHTML = `
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-lg font-semibold text-gray-800">${item.title}</h3>
+              <i class="fas fa-info-circle text-indigo-500"></i>
+            </div>
+            <p class="text-gray-700 whitespace-pre-line">${text}</p>
+          `;
+          analysisDetails.appendChild(card);
+        });
       }
 
       // Reset session and reload

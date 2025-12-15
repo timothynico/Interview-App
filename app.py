@@ -706,6 +706,7 @@ def transcribe_audio():
         }
 
         webhook_status = "pending"
+        webhook_result = None
         video_analysis_payload = {}
 
         # Kalau sudah pertanyaan terakhir (q4) → kirim semua ke n8n
@@ -766,13 +767,17 @@ def transcribe_audio():
                     WEBHOOK_URL,
                     json=payload,
                     headers={"Content-Type": "application/json"},
-                    timeout=20
+                    timeout=100
                 )
 
                 if resp.status_code == 200:
                     webhook_status = "success"
+                    try:
+                        webhook_result = resp.json()
+                    except ValueError:
+                        webhook_result = None
                     print(f"✅ Semua data berhasil dikirim untuk session: {session_id}")
-                    
+
                     # Bersihkan data session
                     if session_id in all_transcripts:
                         del all_transcripts[session_id]
@@ -794,6 +799,7 @@ def transcribe_audio():
             'filename': media_filename,
             'question_number': question_number,
             'webhook_status': webhook_status,
+            'webhook_result': webhook_result,
             'is_last_question': question_number == "4"
         })
 
