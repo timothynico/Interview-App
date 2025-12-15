@@ -181,7 +181,12 @@ def analyze_transcript(courses: List[Dict[str, str]]) -> Dict:
 
 def transform_n8n_data_to_candidate(user_data):
     """Transform data dari n8n ke format kandidat untuk dashboard"""
-    documents = {doc['type']: doc['content'] for doc in user_data.get('documents', [])}
+    documents: Dict[str, List[Dict]] = {}
+    for doc in user_data.get('documents', []):
+        doc_type = doc.get('type')
+        if not doc_type:
+            continue
+        documents.setdefault(doc_type, []).append(doc)
     session_key = f"session_{user_data.get('user_id')}"
     fallback_info = candidate_info.get(session_key, {})
     nrp_value = (
@@ -202,6 +207,21 @@ def transform_n8n_data_to_candidate(user_data):
         or (user_data.get('transkrip') or {}).get('ipk')
         or fallback_info.get('transkrip_ipk')
     )
+
+    answers = []
+    for idx in range(1, 5):
+        question_docs = documents.get(f'Q{idx}', [])
+        doc_payload = question_docs[0] if question_docs else {}
+        answers.append({
+            'question_number': idx,
+            'content': doc_payload.get('content', ''),
+            'analisis_jawaban': doc_payload.get('analisis_jawaban'),
+            'analisis_video': doc_payload.get('analisis_video'),
+            'skor_pertanyaan': doc_payload.get('skor_pertanyaan'),
+            'skor_video': doc_payload.get('skor_video'),
+        })
+
+    primary_docs = {k: v[0] for k, v in documents.items() if v}
     return {
         'id': user_data.get('user_id'),
         'session_id': f"session_{user_data.get('user_id')}",
@@ -210,11 +230,14 @@ def transform_n8n_data_to_candidate(user_data):
         'posisi_dilamar': user_data.get('posisi_dilamar'),  # Tidak ada di data n8n, bisa ditambahkan nanti
         'status': 'complete',
         'registered_at': datetime.now().isoformat(),  # Atau ambil dari timestamp jika ada
-        'CV': documents.get('CV', ''),
-        'Q1': documents.get('Q1', ''),
-        'Q2': documents.get('Q2', ''),
-        'Q3': documents.get('Q3', ''),
-        'Q4': documents.get('Q4', ''),
+        'is_terima': user_data.get('is_terima'),
+        'skor_final': user_data.get('skor_final'),
+        'CV': primary_docs.get('CV', {}).get('content', ''),
+        'Q1': primary_docs.get('Q1', {}).get('content', ''),
+        'Q2': primary_docs.get('Q2', {}).get('content', ''),
+        'Q3': primary_docs.get('Q3', {}).get('content', ''),
+        'Q4': primary_docs.get('Q4', {}).get('content', ''),
+        'answers': answers,
         'transkrip_nrp': nrp_value,
         'nrp': nrp_value,
         'transkrip_prodi': prodi_value,

@@ -49,6 +49,33 @@
         overflow-x: auto;
       }
 
+      .table-controls {
+        display: flex;
+        gap: 20px;
+        margin-bottom: 15px;
+        flex-wrap: wrap;
+        align-items: flex-end;
+      }
+
+      .control-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .control-group label {
+        font-weight: 600;
+        color: #4a4a4a;
+      }
+
+      .control-group select {
+        padding: 10px 14px;
+        border-radius: 8px;
+        border: 1px solid #d0d0d0;
+        font-size: 0.95em;
+        min-width: 200px;
+      }
+
       table {
         width: 100%;
         border-collapse: collapse;
@@ -361,6 +388,16 @@
         color: #856404;
       }
 
+      .status-accepted {
+        background: #e0f7ef;
+        color: #0f5132;
+      }
+
+      .status-rejected {
+        background: #fde2e1;
+        color: #842029;
+      }
+
       .empty-state {
         text-align: center;
         padding: 60px 20px;
@@ -379,6 +416,17 @@
         padding: 40px;
         color: #667eea;
         font-size: 1.2em;
+      }
+
+      .answer-meta {
+        margin-top: 12px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .answer-meta p {
+        margin: 0;
+        color: #444;
       }
 
       @media (max-width: 768px) {
@@ -406,18 +454,39 @@
       </div>
 
       <div class="table-container">
+        <div class="table-controls">
+          <div class="control-group">
+            <label for="statusFilter">Filter Status</label>
+            <select id="statusFilter" onchange="applyFilters()">
+              <option value="all">Semua Status</option>
+              <option value="diterima">Diterima</option>
+              <option value="ditolak">Ditolak</option>
+              <option value="pending">Belum Diputuskan</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label for="scoreSort">Urutkan Skor</label>
+            <select id="scoreSort" onchange="applyFilters()">
+              <option value="none">Tanpa Pengurutan</option>
+              <option value="score-desc">Skor Tertinggi</option>
+              <option value="score-asc">Skor Terendah</option>
+            </select>
+          </div>
+        </div>
         <table id="candidateTable">
           <thead>
             <tr>
               <th>Nama</th>
               <th>Email</th>
               <th>Posisi</th>
+              <th>Status</th>
+              <th>Skor</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody id="candidateBody">
             <tr>
-              <td colspan="4">
+              <td colspan="6">
                 <div class="loading">Loading data...</div>
               </td>
             </tr>
@@ -624,7 +693,7 @@
           if (data.success && data.candidates) {
             allCandidates = data.candidates;
             console.log('allCandidates', allCandidates);
-            renderCandidates(allCandidates);
+            applyFilters();
           } else {
             showEmptyState();
           }
@@ -645,11 +714,15 @@
 
         tbody.innerHTML = candidates
           .map((candidate) => {
+            const statusInfo = getStatusInfo(candidate.is_terima);
+            const scoreDisplay = formatScore(candidate.skor_final);
             return `
                     <tr>
                         <td><strong>${candidate.nama}</strong></td>
                         <td>${candidate.email}</td>
                         <td>${candidate.posisi_dilamar}</td>
+                        <td><span class="status-badge ${statusInfo.className}">${statusInfo.label}</span></td>
+                        <td>${scoreDisplay}</td>
                         <td>
                             <div class="actions">
                                 <button class="btn btn-cv" onclick="showCV('${candidate.session_id}')">
@@ -674,7 +747,7 @@
         const tbody = document.getElementById("candidateBody");
         tbody.innerHTML = `
                 <tr>
-                    <td colspan="4">
+                    <td colspan="6">
                         <div class="empty-state">
                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
@@ -692,7 +765,7 @@
         const tbody = document.getElementById("candidateBody");
         tbody.innerHTML = `
                 <tr>
-                    <td colspan="4">
+                    <td colspan="6">
                         <div class="empty-state">
                             <h3 style="color: #dc3545;">❌ Gagal memuat data</h3>
                             <p>Terjadi kesalahan saat memuat data kandidat. Silakan refresh halaman.</p>
@@ -727,12 +800,34 @@
         const answersHTML = questions
           .map((question, index) => {
             const qKey = `Q${index + 1}`;
-            const answer = candidate[qKey] || "Tidak ada jawaban";
+            const answerData =
+              (candidate.answers || []).find(
+                (ans) => ans.question_number === index + 1
+              ) || {};
+            const answer = answerData.content || candidate[qKey] || "Tidak ada jawaban";
+            const analisisJawaban =
+              answerData.analisis_jawaban || "Tidak ada analisis jawaban";
+            const analisisVideo =
+              answerData.analisis_video || "Tidak ada analisis video";
+            const skorPertanyaan =
+              answerData.skor_pertanyaan !== undefined && answerData.skor_pertanyaan !== null
+                ? answerData.skor_pertanyaan
+                : "-";
+            const skorVideo =
+              answerData.skor_video !== undefined && answerData.skor_video !== null
+                ? answerData.skor_video
+                : "-";
 
             return `
                     <div class="answer-item">
                         <h4>Pertanyaan ${index + 1}: ${question}</h4>
                         <p>${answer}</p>
+                        <div class="answer-meta">
+                          <p><strong>Analisis Jawaban:</strong> ${analisisJawaban}</p>
+                          <p><strong>Skor Pertanyaan:</strong> ${skorPertanyaan}</p>
+                          <p><strong>Analisis Video:</strong> ${analisisVideo}</p>
+                          <p><strong>Skor Video:</strong> ${skorVideo}</p>
+                        </div>
                     </div>
                 `;
           })
@@ -883,6 +978,71 @@
           }
         }
       };
+
+      function getStatusValue(isAccepted) {
+        if (isAccepted === true) return "diterima";
+        if (isAccepted === false) return "ditolak";
+        return "pending";
+      }
+
+      function getStatusInfo(isAccepted) {
+        const statusValue = getStatusValue(isAccepted);
+        if (statusValue === "diterima") {
+          return { label: "Diterima", className: "status-accepted" };
+        }
+        if (statusValue === "ditolak") {
+          return { label: "Ditolak", className: "status-rejected" };
+        }
+        return { label: "Diproses", className: "status-pending" };
+      }
+
+      function formatScore(score) {
+        if (score === null || score === undefined || score === "") return "-";
+        const numericScore = Number(score);
+        if (Number.isNaN(numericScore)) return "-";
+        return numericScore % 1 === 0 ? numericScore : numericScore.toFixed(2);
+      }
+
+      function getSortableScore(candidate) {
+        const numericScore = Number(candidate.skor_final);
+        return Number.isNaN(numericScore) ? null : numericScore;
+      }
+
+      function applyFilters() {
+        let filtered = [...allCandidates];
+        const statusFilter = document.getElementById("statusFilter")?.value || "all";
+        const scoreSort = document.getElementById("scoreSort")?.value || "none";
+
+        if (statusFilter !== "all") {
+          filtered = filtered.filter(
+            (candidate) => getStatusValue(candidate.is_terima) === statusFilter
+          );
+        }
+
+        if (scoreSort === "score-asc") {
+          filtered.sort((a, b) => {
+            const scoreA = getSortableScore(a);
+            const scoreB = getSortableScore(b);
+            if (scoreA === null && scoreB === null) return 0;
+            if (scoreA === null) return 1;
+            if (scoreB === null) return -1;
+            return scoreA - scoreB;
+          });
+        }
+
+        if (scoreSort === "score-desc") {
+          filtered.sort((a, b) => {
+            const scoreA = getSortableScore(a);
+            const scoreB = getSortableScore(b);
+            if (scoreA === null && scoreB === null) return 0;
+            if (scoreA === null) return 1;
+            if (scoreB === null) return -1;
+            return scoreB - scoreA;
+          });
+        }
+
+        renderCandidates(filtered);
+      }
     </script>
   </body>
 </html>
