@@ -214,11 +214,13 @@ def transform_n8n_data_to_candidate(user_data):
         doc_payload = question_docs[0] if question_docs else {}
         answers.append({
             'question_number': idx,
+            'id': doc_payload.get('id'),
             'content': doc_payload.get('content', ''),
             'analisis_jawaban': doc_payload.get('analisis_jawaban'),
             'analisis_video': doc_payload.get('analisis_video'),
             'skor_pertanyaan': doc_payload.get('skor_pertanyaan'),
             'skor_video': doc_payload.get('skor_video'),
+            'human_rating': doc_payload.get('human_rating'),
         })
 
     primary_docs = {k: v[0] for k, v in documents.items() if v}
