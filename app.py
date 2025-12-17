@@ -219,6 +219,8 @@ def transform_n8n_data_to_candidate(user_data):
             'analisis_video': doc_payload.get('analisis_video'),
             'skor_pertanyaan': doc_payload.get('skor_pertanyaan'),
             'skor_video': doc_payload.get('skor_video'),
+            'human_review': doc_payload.get('human_review'),
+            'document_id': doc_payload.get('id'),
         })
 
     primary_docs = {k: v[0] for k, v in documents.items() if v}
@@ -242,6 +244,7 @@ def transform_n8n_data_to_candidate(user_data):
         'nrp': nrp_value,
         'transkrip_prodi': prodi_value,
         'transkrip_ipk': ipk_value,
+        'human_review': user_data.get('human_review'),
     }
 
 
