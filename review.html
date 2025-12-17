@@ -893,12 +893,7 @@
         statusEl.style.color = isError ? "#b91c1c" : "#166534";
       }
 
-      async function submitHumanScore(
-        event,
-        sessionId,
-        questionNumber,
-        documentId
-      ) {
+      async function submitHumanScore(event, sessionId, questionNumber) {
         event.preventDefault();
         const input = document.getElementById(
           `score-input-${sessionId}-${questionNumber}`
@@ -938,9 +933,7 @@
             body: JSON.stringify({
               session_id: sessionId,
               question_number: questionNumber,
-              document_id: documentId || null,
               score: numericValue,
-              nilai: numericValue,
               candidate_name: candidate?.nama,
               candidate_email: candidate?.email,
             }),
@@ -996,7 +989,6 @@
               answerData.skor_video !== undefined && answerData.skor_video !== null
                 ? answerData.skor_video
                 : "-";
-            const documentId = answerData.document_id;
             const humanReviewData = getHumanReviewEntry(
               candidate,
               index + 1,
@@ -1019,7 +1011,7 @@
                           <p><strong>Analisis Video:</strong> ${analisisVideo}</p>
                           <p><strong>Skor Video:</strong> ${skorVideo}</p>
                           <div class="human-review"><strong>Human Review:</strong> ${humanReviewText}</div>
-                          <form class="score-form" onsubmit="submitHumanScore(event, '${sessionId}', ${index + 1}, '${documentId ?? ""}')">
+                          <form class="score-form" onsubmit="submitHumanScore(event, '${sessionId}', ${index + 1})">
                             <label for="score-input-${sessionId}-${index + 1}"><strong>Masukkan Nilai Human</strong></label>
                             <div class="score-input-wrapper">
                               <input

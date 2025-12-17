@@ -220,7 +220,6 @@ def transform_n8n_data_to_candidate(user_data):
             'skor_pertanyaan': doc_payload.get('skor_pertanyaan'),
             'skor_video': doc_payload.get('skor_video'),
             'human_review': doc_payload.get('human_review'),
-            'document_id': doc_payload.get('id'),
         })
 
     primary_docs = {k: v[0] for k, v in documents.items() if v}
