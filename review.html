@@ -863,6 +863,56 @@
         return { text: null, score: null };
       }
 
+      function parseQuestionNumber(value) {
+        if (value === null || value === undefined) return null;
+        if (typeof value === "number") return value;
+
+        const stringValue = String(value).toUpperCase();
+        const match = stringValue.match(/Q(\d+)/);
+        if (match) return Number(match[1]);
+
+        const numeric = Number(stringValue);
+        return Number.isNaN(numeric) ? null : numeric;
+      }
+
+      function getHumanRating(candidate, questionNumber, answerData = {}) {
+        if (
+          answerData?.human_rating !== undefined &&
+          answerData?.human_rating !== null
+        ) {
+          return answerData.human_rating;
+        }
+
+        if (
+          candidate?.human_rating &&
+          typeof candidate.human_rating === "object" &&
+          !Array.isArray(candidate.human_rating)
+        ) {
+          const key = `Q${questionNumber}`;
+          const directMatch =
+            candidate.human_rating[key] || candidate.human_rating[questionNumber];
+          if (directMatch !== undefined && directMatch !== null) return directMatch;
+        }
+
+        if (Array.isArray(candidate?.documents)) {
+          const matchedDoc = candidate.documents.find((doc) => {
+            const docType = doc?.type || doc?.document_type || doc?.documentType;
+            const docNumber = parseQuestionNumber(docType);
+            return docNumber === questionNumber;
+          });
+
+          if (
+            matchedDoc &&
+            matchedDoc.human_rating !== undefined &&
+            matchedDoc.human_rating !== null
+          ) {
+            return matchedDoc.human_rating;
+          }
+        }
+
+        return null;
+      }
+
       function extractHumanReviewData(value) {
         if (value === null || value === undefined) return null;
         if (typeof value === "string") return { text: value, score: null };
@@ -997,9 +1047,9 @@
             const humanReviewText =
               humanReviewData?.text || "Belum ada review human";
             const humanReviewScore =
-              humanReviewData?.score !== undefined && humanReviewData?.score !== null
-                ? humanReviewData.score
-                : "";
+              humanReviewData?.score ??
+              getHumanRating(candidate, index + 1, answerData) ??
+              "";
 
             return `
                     <div class="answer-item">
