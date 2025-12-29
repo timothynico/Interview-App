@@ -123,7 +123,7 @@ def save_skkk_to_csv(skkk_data: List[Dict], output_path: str = "skkk_non_wajib.c
 # Untuk testing langsung dari command line
 if __name__ == "__main__":
     # Hardcoded NRP untuk testing
-    test_nrp = "C14220062"
+    test_nrp = "c14220149"
 
     print(f"=== Scraping SKKK untuk NRP: {test_nrp} ===\n")
     result = scrape_skkk_data(test_nrp)
